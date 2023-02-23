@@ -215,12 +215,21 @@ class COCOEvaluator:
             output = output.cpu()
 
             bboxes = output[:, 0:4]
-
+        
             # preprocessing: resize
-            scale = min(
+            # scale = min(
+            #     self.img_size[0] / float(img_h), self.img_size[1] / float(img_w)
+            # )
+            # bboxes /= scale
+
+            scale = [
                 self.img_size[0] / float(img_h), self.img_size[1] / float(img_w)
-            )
-            bboxes /= scale
+            ]
+            bboxes[:, 0] /= scale[1]
+            bboxes[:, 1] /= scale[0]
+            bboxes[:, 2] /= scale[1]
+            bboxes[:, 3] /= scale[0]
+
             cls = output[:, 6]
             scores = output[:, 4] * output[:, 5]
 

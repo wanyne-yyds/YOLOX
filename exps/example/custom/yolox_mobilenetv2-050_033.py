@@ -21,7 +21,7 @@ class Exp(MyExp):
 
         # ---------------- dataloader config ---------------- #
         self.data_num_workers = 10          #* 工人数量
-        self.input_size = (320, 576)        #* 输入尺寸(高, 宽)
+        self.input_size = (416, 416)        #* 输入尺寸(高, 宽)
         self.multiscale_range = 0           #* 0 关闭多尺度
         self.data_dir = "/code/data/YOLOX-Yolo2CocoFormat-BSD_One_Classes-2023-02-22_15:52"
         self.train_ann = "instances_train2017.json"
@@ -29,26 +29,26 @@ class Exp(MyExp):
         self.output_dir = "./YOLOX_outputs/YOLOX-BSD"
 
         # --------------- transform config ----------------- #
-        self.mosaic_prob = 0.0              #* 马赛克概率
-        self.mixup_prob = 0.0
+        self.mosaic_prob = 0.0              #* mosaic 概率
+        self.mixup_prob = 0.0               #* mixup 概率
         self.hsv_prob = 1.0
-        self.flip_prob = 0.5
-        self.degrees = 10.0
-        self.translate = 0.1
-        self.mosaic_scale = (0.5, 1.5)      #* 马赛克尺度
-        self.enable_mixup = False           #* 关闭minup
-        self.shear = 2.0
+        self.flip_prob = 0.5                
+        self.degrees = 10.0                 #* 旋转角范围 (-2, 2)
+        self.translate = 0.1                #* 翻转角范围 (-0.1, 0.1)
+        self.mosaic_scale = (0.5, 1.5)      #* mosaic 尺度
+        self.enable_mixup = False           #* 关闭 minup
+        self.shear = 2.0                    #* 剪切角范围
 
         # --------------  training config --------------------- #
         self.warmup_epochs = 5              #* 热身
-        self.max_epoch = 160                #* 最大epoch
+        self.max_epoch = 160                #* 最大 epoch
         self.basic_lr_per_img = 0.01 / 64.0 #* LR
-        self.no_aug_epochs = 0              #* 多少epoch关闭马赛克増强
-        self.eval_interval = 10             #* 验证epoch
+        self.no_aug_epochs = 0              #* 多少 epoch 关闭 mosaic 増强
+        self.eval_interval = 10             #* 验证 epoch
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
 
         # -----------------  testing config ------------------ #
-        self.test_size = (320, 576)         #* 测试尺寸
+        self.test_size = (416, 416)         #* 测试尺寸
 
     def get_model(self):
         def init_yolo(M):

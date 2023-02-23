@@ -14,7 +14,7 @@ fi
 # echo "${arrayfile} not exist"
 # fi
 current_time=$(date "+%Y-%m-%d_%H_%M_%S")
-CUDA_VISIBLE_DEVICES=0,1 python3 tools/train.py \
+CUDA_VISIBLE_DEVICES=1,2 python3 tools/train.py \
     -expn yolox-mobilenetv2-050_033 \
     -d 2 \
     -b 64 \
@@ -22,7 +22,7 @@ CUDA_VISIBLE_DEVICES=0,1 python3 tools/train.py \
     -o \
     --logger wandb \
         wandb-project YOLOX-BSD \
-        wandb-name YOLOX-MobilenetV2-050_033-hyhdatset-$current_time \
+        wandb-name YOLOX-MobilenetV2-050_033-hyhdatset-Changetheratio-$current_time \
         wandb-save_dir YOLOX_outputs \
 
 # --fp16 \

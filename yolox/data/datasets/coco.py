@@ -113,11 +113,17 @@ class COCODataset(CacheDataset):
             res[ix, 0:4] = obj["clean_bbox"]
             res[ix, 4] = cls
 
-        r = min(self.img_size[0] / height, self.img_size[1] / width)
-        res[:, :4] *= r
+        # r = min(self.img_size[0] / height, self.img_size[1] / width)
+        # res[:, :4] *= r
+
+        r = self.img_size[0] / height, self.img_size[1] / width
+        res[:, 0] *= r[1]
+        res[:, 1] *= r[0]
+        res[:, 2] *= r[1]
+        res[:, 3] *= r[0]
 
         img_info = (height, width)
-        resized_info = (int(height * r), int(width * r))
+        resized_info = (int(self.img_size[0]), int(self.img_size[1]))
 
         file_name = (
             im_ann["file_name"]
@@ -132,10 +138,11 @@ class COCODataset(CacheDataset):
 
     def load_resized_img(self, index):
         img = self.load_image(index)
-        r = min(self.img_size[0] / img.shape[0], self.img_size[1] / img.shape[1])
+        # r = min(self.img_size[0] / img.shape[0], self.img_size[1] / img.shape[1])
         resized_img = cv2.resize(
             img,
-            (int(img.shape[1] * r), int(img.shape[0] * r)),
+            # (int(img.shape[1] * r), int(img.shape[0] * r)),
+            (int(self.img_size[1]), int(self.img_size[0])),
             interpolation=cv2.INTER_LINEAR,
         ).astype(np.uint8)
         return resized_img

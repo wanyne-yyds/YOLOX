@@ -35,25 +35,33 @@ if __name__ == "__main__":
     if args.phase == 'train':
         loader = exp.get_data_loader(batch_size=1, is_distributed=False)
     elif args.phase == 'val':
-        loader = exp.get_eval_dataset(batch_size=1, is_distributed=False)
+        loader = exp.get_eval_loader(batch_size=1, is_distributed=False)
 
     for img, target, img_info, img_id in loader:
-        if args.phase == 'train':
-            image = torch.squeeze(img)
-            image = image.numpy().astype(np.uint8).copy()
-            target = torch.squeeze(target)
-        else:
-            image = img
+        image = torch.squeeze(img)
+        image = image.numpy().astype(np.uint8).copy()
+        target = torch.squeeze(target)
         images = image.transpose(swap).astype(np.uint8).copy()
         imgname = "./readimg.jpg"
+        if len(target.shape) == 1:
+            target = target.numpy()[np.newaxis, :]
 
         for i in range(len(target)):
-            box = target[i][1:]
-            x0 = int((box[0] - box[2] * 0.5))
-            y0 = int((box[1] - box[3] * 0.5))
-            x1 = int((box[0] + box[2] * 0.5))
-            y1 = int((box[1] + box[3] * 0.5))
-            cls = target[i][0]
+            if args.phase == "train":
+                box = target[i][1:]
+                cls = target[i][0]
+                x0 = int((box[0] - box[2] * 0.5))
+                y0 = int((box[1] - box[3] * 0.5))
+                x1 = int((box[0] + box[2] * 0.5))
+                y1 = int((box[1] + box[3] * 0.5))
+            else:
+                box = target[i][:4]
+                cls = target[i][4]
+                x0 = int((box[0]))
+                y0 = int((box[1]))
+                x1 = int((box[2]))
+                y1 = int((box[3]))
+
             if np.sum([x0,x1,y0,y1]) == 0:
                 continue
             cv2.rectangle(images, (x0, y0), (x1, y1), (0,0,255), 1)
