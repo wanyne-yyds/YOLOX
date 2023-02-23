@@ -76,12 +76,14 @@ def main():
         ckpt_file = args.ckpt
 
     # load the model state dict
-    ckpt = torch.load(ckpt_file, map_location="cpu")
+    if args.ckpt is not None:
+        ckpt = torch.load(ckpt_file, map_location="cpu")
 
     model.eval()
-    if "model" in ckpt:
-        ckpt = ckpt["model"]
-    model.load_state_dict(ckpt)
+    if args.ckpt is not None:
+        if "model" in ckpt:
+            ckpt = ckpt["model"]
+        model.load_state_dict(ckpt)
     model = replace_module(model, nn.SiLU, SiLU)
     model.head.decode_in_inference = args.decode_in_inference
 

@@ -146,6 +146,7 @@ class Predictor(object):
         img_info["ratio"] = ratio
 
         img, _ = self.preproc(img, None, self.test_size)
+        print(img.shape)
         img = torch.from_numpy(img).unsqueeze(0)
         img = img.float()
         if self.device == "gpu":

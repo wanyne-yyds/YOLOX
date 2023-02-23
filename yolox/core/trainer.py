@@ -59,7 +59,7 @@ class Trainer:
 
         # metric record
         self.meter = MeterBuffer(window_size=exp.print_interval)
-        self.file_name = os.path.join(exp.output_dir, args.experiment_name)
+        self.file_name = os.path.join(exp.output_dir, args.experiment_name + '_%s'%(time.strftime("%Y-%m-%d_%H%M%S", time.localtime())))
 
         if self.rank == 0:
             os.makedirs(self.file_name, exist_ok=True)

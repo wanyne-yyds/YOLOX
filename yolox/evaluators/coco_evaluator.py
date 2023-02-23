@@ -283,13 +283,13 @@ class COCOEvaluator:
         if len(data_dict) > 0:
             cocoGt = self.dataloader.dataset.coco
             # TODO: since pycocotools can't process dict in py36, write data to json file.
-            if self.testdev:
-                json.dump(data_dict, open("./yolox_testdev_2017.json", "w"))
-                cocoDt = cocoGt.loadRes("./yolox_testdev_2017.json")
-            else:
-                _, tmp = tempfile.mkstemp()
-                json.dump(data_dict, open(tmp, "w"))
-                cocoDt = cocoGt.loadRes(tmp)
+            # if self.testdev:
+            json.dump(data_dict, open("./yolox_testdev_2017.json", "w"))
+            cocoDt = cocoGt.loadRes("./yolox_testdev_2017.json")
+            # else:
+            #     _, tmp = tempfile.mkstemp()
+            #     json.dump(data_dict, open(tmp, "w"))
+            #     cocoDt = cocoGt.loadRes(tmp)
             try:
                 from yolox.layers import COCOeval_opt as COCOeval
             except ImportError:

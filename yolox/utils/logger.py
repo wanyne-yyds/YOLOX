@@ -238,21 +238,22 @@ class WandbLogger(object):
         """
         if self.val_artifact is None:
             self.val_artifact = self.wandb.Artifact(name="validation_images", type="dataset")
-            self.val_table = self.wandb.Table(columns=["id", "input"])
+            self.val_table = self.wandb.Table(columns=["id", "input", "shape"])
 
             for i in range(self.num_log_images):
                 data_point = val_dataset[i]
                 img = data_point[0]
+                shape = data_point[2]
                 id = data_point[3]
                 img = np.transpose(img, (1, 2, 0))
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
                 if isinstance(id, torch.Tensor):
                     id = id.item()
 
                 self.val_table.add_data(
                     id,
-                    self.wandb.Image(img)
+                    self.wandb.Image(img),
+                    shape
                 )
 
             self.val_artifact.add(self.val_table, "validation_images_table")
@@ -334,6 +335,10 @@ class WandbLogger(object):
             num_occurrences = defaultdict(int)
 
             id = val[0]
+            srcwidth, srcheight = val[2]               # 宽，高
+            img_height = val[1]._height
+            img_width = val[1]._height
+            ratio = min(img_height / srcheight, img_width / srcwidth)
             if isinstance(id, list):
                 id = id[0]
 
@@ -342,10 +347,10 @@ class WandbLogger(object):
                 boxes = []
                 for i in range(len(prediction["bboxes"])):
                     bbox = prediction["bboxes"][i]
-                    x0 = bbox[0]
-                    y0 = bbox[1]
-                    x1 = bbox[2]
-                    y1 = bbox[3]
+                    x0 = int(bbox[0] * ratio)
+                    y0 = int(bbox[1] * ratio)
+                    x1 = int(bbox[2] * ratio)
+                    y1 = int(bbox[3] * ratio)
                     box = {
                         "position": {
                             "minX": min(x0, x1),
