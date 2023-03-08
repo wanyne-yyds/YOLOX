@@ -23,13 +23,13 @@ class Exp(MyExp):
         self.data_num_workers = 10          #* 工人数量
         self.input_size = (416, 416)        #* 输入尺寸(高, 宽)
         self.multiscale_range = 0           #* 0 关闭多尺度
-        self.data_dir = "/code/data/YOLOX-Yolo2CocoFormat-BSD_One_Classes-2023-02-22_15:52"
+        self.data_dir = "/code/data/YOLOX-CocoFormat-BSD_One_Classes-2023-02-20_15:48:43"
         self.train_ann = "instances_train2017.json"
         self.val_ann = "instances_val2017.json"
         self.output_dir = "./YOLOX_outputs/YOLOX-BSD"
 
         # --------------- transform config ----------------- #
-        self.mosaic_prob = 0.0              #* mosaic 概率
+        self.mosaic_prob = 1.0              #* mosaic 概率
         self.mixup_prob = 0.0               #* mixup 概率
         self.hsv_prob = 1.0
         self.flip_prob = 0.5                

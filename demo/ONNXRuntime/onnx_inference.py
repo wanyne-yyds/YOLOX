@@ -5,7 +5,9 @@ import argparse
 import os
 
 import cv2
+import time
 import numpy as np
+from pathlib import Path
 
 import onnxruntime
 
@@ -57,30 +59,51 @@ if __name__ == '__main__':
     args = make_parser().parse_args()
 
     input_shape = tuple(map(int, args.input_shape.split(',')))
-    origin_img = cv2.imread(args.image_path)
-    img, ratio = preprocess(origin_img, input_shape)
+    images_path = Path(args.image_path).rglob("*.*g")
+    for imgpath in images_path:
+        imgpath = str(imgpath)
+        origin_img = cv2.imread(imgpath)
+        img, ratio = preprocess(origin_img, input_shape)
 
-    session = onnxruntime.InferenceSession(args.model)
+        session = onnxruntime.InferenceSession(args.model)
+        ort_inputs = {session.get_inputs()[0].name: img[None, :, :, :]}
+        output = session.run(None, ort_inputs)
+        predictions = demo_postprocess(output[0], input_shape)[0]
 
-    ort_inputs = {session.get_inputs()[0].name: img[None, :, :, :]}
-    output = session.run(None, ort_inputs)
-    predictions = demo_postprocess(output[0], input_shape)[0]
+        boxes = predictions[:, :4]
+        scores = predictions[:, 4:5] * predictions[:, 5:]
 
-    boxes = predictions[:, :4]
-    scores = predictions[:, 4:5] * predictions[:, 5:]
+        boxes_xyxy = np.ones_like(boxes)
+        boxes_xyxy[:, 0] = boxes[:, 0] - boxes[:, 2]/2.
+        boxes_xyxy[:, 1] = boxes[:, 1] - boxes[:, 3]/2.
+        boxes_xyxy[:, 2] = boxes[:, 0] + boxes[:, 2]/2.
+        boxes_xyxy[:, 3] = boxes[:, 1] + boxes[:, 3]/2.
+        boxes_xyxy[:, 0] /= ratio[1]
+        boxes_xyxy[:, 1] /= ratio[0]
+        boxes_xyxy[:, 2] /= ratio[1]
+        boxes_xyxy[:, 3] /= ratio[0]
 
-    boxes_xyxy = np.ones_like(boxes)
-    boxes_xyxy[:, 0] = boxes[:, 0] - boxes[:, 2]/2.
-    boxes_xyxy[:, 1] = boxes[:, 1] - boxes[:, 3]/2.
-    boxes_xyxy[:, 2] = boxes[:, 0] + boxes[:, 2]/2.
-    boxes_xyxy[:, 3] = boxes[:, 1] + boxes[:, 3]/2.
-    boxes_xyxy /= ratio
-    dets = multiclass_nms(boxes_xyxy, scores, nms_thr=0.45, score_thr=0.1)
-    if dets is not None:
-        final_boxes, final_scores, final_cls_inds = dets[:, :4], dets[:, 4], dets[:, 5]
-        origin_img = vis(origin_img, final_boxes, final_scores, final_cls_inds,
-                         conf=args.score_thr, class_names=COCO_CLASSES)
+        dets = multiclass_nms(boxes_xyxy, scores, nms_thr=0.45, score_thr=0.1)
 
-    mkdir(args.output_dir)
-    output_path = os.path.join(args.output_dir, os.path.basename(args.image_path))
-    cv2.imwrite(output_path, origin_img)
+        mkdir(args.output_dir)
+        output_path = os.path.join(args.output_dir, os.path.basename(imgpath))
+        output_txt = output_path.replace('jpg', 'txt').replace('png', 'txt')
+        with open(output_txt, 'w') as f:
+            if dets is not None:
+                final_boxes, final_scores, final_cls_inds = dets[:, :4], dets[:, 4], dets[:, 5]
+                origin_img = vis(origin_img, final_boxes, final_scores, final_cls_inds,
+                                conf=args.score_thr, class_names=COCO_CLASSES)
+
+                for index, box in enumerate(final_boxes):
+                    scores_i = final_scores[index]
+                    if scores_i < args.score_thr:
+                        continue
+                    xmin, ymin, xmax, ymax = box
+                    xmin, ymin, xmax, ymax = map(lambda x: str(round(x + 0.5)), (xmin, ymin, xmax, ymax))
+                    cls_ = COCO_CLASSES
+                    scores_s = '%.2f'%scores_i
+                    strxy = cls_+" "+scores_s+" "+xmin+" "+ymin+" "+xmax+" "+ymax
+                    f.writelines(strxy+'\n')
+        # cv2.imwrite(output_path, origin_img)
+        # cv2.imwrite('./onnx.jpg', origin_img)
+        # time.sleep(1)

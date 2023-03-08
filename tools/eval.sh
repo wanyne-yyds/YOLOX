@@ -1,6 +1,6 @@
-CUDA_VISIBLE_DEVICES=3 python3 tools/eval.py \
+CUDA_VISIBLE_DEVICES=0 python3 tools/eval.py \
     -expn Mobilenetv205033_416x416 \
-    -f /code/YOLOX/exps/example/custom/yolox_mobilenetv2-050_033.py \
+    -f /code/YOLOX/exps/example/custom/yolox_mobilenetv2-050_033_ckn.py \
     -d 1 \
     -c /code/YOLOX/YOLOX_outputs/YOLOX-BSD/yolox-mobilenetv2-050_033_2023-02-22_163339/best_ckpt.pth \
     --conf 0.001

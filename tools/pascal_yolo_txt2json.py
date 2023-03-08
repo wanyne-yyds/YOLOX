@@ -56,6 +56,7 @@ def convert(jpg_list, json_file, txt_file):
                     all_categories[category] += 1
                 else:
                     all_categories[category] = 1
+                    
                 # if category not in categories:
                 #     if only_care_pre_define_categories:
                 #         continue

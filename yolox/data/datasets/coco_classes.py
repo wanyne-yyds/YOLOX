@@ -3,5 +3,7 @@
 # Copyright (c) Megvii, Inc. and its affiliates.
 
 COCO_CLASSES = (
-    "person",
+    "person"
 )
+
+#     "rearview mirror"
