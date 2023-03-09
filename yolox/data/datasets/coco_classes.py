@@ -4,6 +4,5 @@
 
 COCO_CLASSES = (
     "person"
+    "other"
 )
-
-#     "rearview mirror"

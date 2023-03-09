@@ -3,11 +3,13 @@
 # Copyright (c) Megvii, Inc. and its affiliates.
 
 import argparse
+import thop
 import os
 from loguru import logger
 
 import torch
 from torch import nn
+from fvcore.nn import FlopCountAnalysis, flop_count_table, flop_count_str
 
 from yolox.exp import get_exp
 from yolox.models.network_blocks import SiLU
@@ -90,12 +92,21 @@ def main():
     logger.info("loading checkpoint done.")
     dummy_input = torch.randn(args.batch_size, 3, exp.test_size[0], exp.test_size[1])
 
+    flops = FlopCountAnalysis(model, dummy_input)
+    flops_data = flop_count_table(flops)
+    # flops_data = flop_count_str(flops)
+    print(flops_data)
+    flops, params = thop.profile(model, inputs=(dummy_input, ))
+    flops, params = thop.clever_format([flops, params], '%.3f')
+    logger.info('flops: %s' %flops)
+    logger.info('params:%s' %params)
+
     torch.onnx._export(
         model,
         dummy_input,
         args.output_name,
         input_names=[args.input],
-        output_names=[args.output],
+        output_names=args.output.split(","),
         dynamic_axes={args.input: {0: 'batch'},
                       args.output: {0: 'batch'}} if args.dynamic else None,
         opset_version=args.opset,

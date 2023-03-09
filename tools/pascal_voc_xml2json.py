@@ -10,12 +10,12 @@ import xml.etree.ElementTree as ET
 from pathlib import Path 
 from prettytable import PrettyTable
 
-path2 = "/code/data/YOLOX-CocoFormat-BSD_One_Classes-%s/"%(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())) # 输出文件夹
-classes = [ "person"]
-train_xml_dir = "/code/data/BSD/Annotations/train/"         # xml文件
-val_xml_dir   = "/code/data/BSD/Annotations/val/"           # xml文件
-train_img_dir = "/code/data/BSD/JPEGImages/train"           # 图片
-val_img_dir   = "/code/data/BSD/JPEGImages/val"             # 图片
+path2 = "/code/data/YOLOX-CocoFormat-BSD_Two_Classes-v0.0.1-%s/"%(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())) # 输出文件夹
+classes = [ "person", "other"]
+train_xml_dir = "/code/data/s_BSD/ckn_bsd_cocoformat_v0.0.1/Annotations/train/"         # xml文件
+val_xml_dir   = "/code/data/s_BSD/ckn_bsd_cocoformat_v0.0.1/Annotations/val/"           # xml文件
+train_img_dir = "/code/data/s_BSD/ckn_bsd_cocoformat_v0.0.1/JPEGImages/train"           # 图片
+val_img_dir   = "/code/data/s_BSD/ckn_bsd_cocoformat_v0.0.1/JPEGImages/val"             # 图片
 
 # train_ratio = 1.0 # 训练集的比例
 
@@ -59,6 +59,10 @@ def convert(xml_list, json_file, txt_file):
         #  assert segmented == '0'
         for obj in get(root, 'object'):
             category = get_and_check(obj, 'name', 1).text
+            if category == 'rearview mirror':
+                category = 'other'
+            if category == 'personD':
+                category = 'person'
             if category in all_categories:
                 all_categories[category] += 1
             else:

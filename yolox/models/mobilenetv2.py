@@ -4,11 +4,12 @@
 from torch.functional import norm
 
 import torch.nn as nn
-
 try:
     from torch.hub import load_state_dict_from_url
 except ImportError:
     from torch.utils.model_zoo import load_url as load_state_dict_from_url
+
+from yolox.models.network_blocks import act_layers
 
 
 __all__ = ['MobileNetV2']
@@ -61,15 +62,17 @@ class ConvBNActivation(nn.Sequential):
         padding = (kernel_size - 1) // 2 * dilation
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
-        if activation_layer is None:
-            # activation_layer = nn.ReLU6
-            activation_layer = nn.ReLU
-            # activation_layer = nn.SiLU # 0.25
+        # if activation_layer is None:
+        #     # activation_layer = nn.ReLU6
+        #     activation_layer = nn.ReLU
+        #     # activation_layer = nn.SiLU # 0.25
+        activation_layer = act_layers(activation_layer)
         super(ConvBNReLU, self).__init__(
             nn.Conv2d(in_planes, out_planes, kernel_size, stride, padding, dilation=dilation, groups=groups,
                       bias=False),
             norm_layer(out_planes),
-            activation_layer(inplace=True)
+            activation_layer
+            # activation_layer(inplace=True)
         )
         self.out_channels = out_planes
 
@@ -85,6 +88,7 @@ class InvertedResidual(nn.Module):
         oup,
         stride,
         expand_ratio,
+        activation_layer="ReLU",
         norm_layer= None
     ):
         super(InvertedResidual, self).__init__()
@@ -100,10 +104,10 @@ class InvertedResidual(nn.Module):
         layers  = []
         if expand_ratio != 1:
             # pw
-            layers.append(ConvBNReLU(inp, hidden_dim, kernel_size=1, norm_layer=norm_layer))
+            layers.append(ConvBNReLU(inp, hidden_dim, kernel_size=1, norm_layer=norm_layer, activation_layer=activation_layer))
         layers.extend([
             # dw
-            ConvBNReLU(hidden_dim, hidden_dim, stride=stride, groups=hidden_dim, norm_layer=norm_layer),
+            ConvBNReLU(hidden_dim, hidden_dim, stride=stride, groups=hidden_dim, norm_layer=norm_layer, activation_layer=activation_layer),
             # pw-linear
             nn.Conv2d(hidden_dim, oup, 1, 1, 0, bias=False),
             norm_layer(oup),
@@ -130,6 +134,7 @@ class MobileNetV2(nn.Module):
         block= None,
         norm_layer= None,
         pretrained=True,
+        activation="ReLU"
     ):
         """
         MobileNet V2 main class
@@ -170,7 +175,6 @@ class MobileNetV2(nn.Module):
                 [6, 160, 3, 2],
                 [6, 320, 1, 1],
             ]
-
         # only check the first element, assuming user knows t,c,n,s are required
         if len(inverted_residual_setting) == 0 or len(inverted_residual_setting[0]) != 4:
             raise ValueError("inverted_residual_setting should be non-empty "
@@ -181,13 +185,13 @@ class MobileNetV2(nn.Module):
 
         self.last_channel = make_divisible(last_channel * max(1.0, widen_factor), round_nearest)
         # stem
-        features = [ConvBNReLU(input_shape[0], input_channel, kernel_size=3, stride=2, norm_layer=norm_layer)]
+        features = [ConvBNReLU(input_shape[0], input_channel, kernel_size=3, stride=2, norm_layer=norm_layer, activation_layer=activation)]
         # building inverted residual blocks
         for t, c, n, s in inverted_residual_setting:
             output_channel = make_divisible(c * widen_factor, round_nearest)
             for i in range(n):
                 stride = s if i == 0 else 1
-                features.append(block(input_channel, output_channel, stride, expand_ratio=t, norm_layer=norm_layer))
+                features.append(block(input_channel, output_channel, stride, expand_ratio=t, norm_layer=norm_layer,activation_layer=activation))
                 input_channel = output_channel
 
         # building last several layers

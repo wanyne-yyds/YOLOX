@@ -24,6 +24,7 @@ class YOLOXHead(nn.Module):
         in_channels=[256, 512, 1024],
         act="silu",
         depthwise=False,
+        conv_models_deploy=False
     ):
         """
         Args:
@@ -34,6 +35,7 @@ class YOLOXHead(nn.Module):
 
         self.num_classes = num_classes
         self.decode_in_inference = True  # for deploy, set to False
+        self.conv_models_deploy = conv_models_deploy
 
         self.cls_convs = nn.ModuleList()
         self.reg_convs = nn.ModuleList()
@@ -47,7 +49,7 @@ class YOLOXHead(nn.Module):
             self.stems.append(
                 BaseConv(
                     in_channels=int(in_channels[i] * width),
-                    out_channels=int(256 * width),
+                    out_channels=int(32 * width),
                     ksize=1,
                     stride=1,
                     act=act,
@@ -57,15 +59,15 @@ class YOLOXHead(nn.Module):
                 nn.Sequential(
                     *[
                         Conv(
-                            in_channels=int(256 * width),
-                            out_channels=int(256 * width),
+                            in_channels=int(32 * width),
+                            out_channels=int(32 * width),
                             ksize=3,
                             stride=1,
                             act=act,
                         ),
                         Conv(
-                            in_channels=int(256 * width),
-                            out_channels=int(256 * width),
+                            in_channels=int(32 * width),
+                            out_channels=int(32 * width),
                             ksize=3,
                             stride=1,
                             act=act,
@@ -77,15 +79,15 @@ class YOLOXHead(nn.Module):
                 nn.Sequential(
                     *[
                         Conv(
-                            in_channels=int(256 * width),
-                            out_channels=int(256 * width),
+                            in_channels=int(32 * width),
+                            out_channels=int(32 * width),
                             ksize=3,
                             stride=1,
                             act=act,
                         ),
                         Conv(
-                            in_channels=int(256 * width),
-                            out_channels=int(256 * width),
+                            in_channels=int(32 * width),
+                            out_channels=int(32 * width),
                             ksize=3,
                             stride=1,
                             act=act,
@@ -95,7 +97,7 @@ class YOLOXHead(nn.Module):
             )
             self.cls_preds.append(
                 nn.Conv2d(
-                    in_channels=int(256 * width),
+                    in_channels=int(32 * width),
                     out_channels=self.num_classes,
                     kernel_size=1,
                     stride=1,
@@ -104,7 +106,7 @@ class YOLOXHead(nn.Module):
             )
             self.reg_preds.append(
                 nn.Conv2d(
-                    in_channels=int(256 * width),
+                    in_channels=int(32 * width),
                     out_channels=4,
                     kernel_size=1,
                     stride=1,
@@ -113,7 +115,7 @@ class YOLOXHead(nn.Module):
             )
             self.obj_preds.append(
                 nn.Conv2d(
-                    in_channels=int(256 * width),
+                    in_channels=int(32 * width),
                     out_channels=1,
                     kernel_size=1,
                     stride=1,
@@ -184,9 +186,12 @@ class YOLOXHead(nn.Module):
                     origin_preds.append(reg_output.clone())
 
             else:
-                output = torch.cat(
-                    [reg_output, obj_output.sigmoid(), cls_output.sigmoid()], 1
-                )
+                if self.conv_models_deploy:
+                    output = [reg_output, obj_output.sigmoid(), cls_output.sigmoid()]
+                else:
+                    output = torch.cat(
+                        [reg_output, obj_output.sigmoid(), cls_output.sigmoid()], 1
+                    )
 
             outputs.append(output)
 
@@ -202,11 +207,12 @@ class YOLOXHead(nn.Module):
                 dtype=xin[0].dtype,
             )
         else:
-            self.hw = [x.shape[-2:] for x in outputs]
-            # [batch, n_anchors_all, 85]
-            outputs = torch.cat(
-                [x.flatten(start_dim=2) for x in outputs], dim=2
-            ).permute(0, 2, 1)
+            if not self.conv_models_deploy:
+                self.hw = [x.shape[-2:] for x in outputs]
+                # [batch, n_anchors_all, 85]
+                outputs = torch.cat(
+                    [x.flatten(start_dim=2) for x in outputs], dim=2
+                ).permute(0, 2, 1)
             if self.decode_in_inference:
                 return self.decode_outputs(outputs, dtype=xin[0].type())
             else:

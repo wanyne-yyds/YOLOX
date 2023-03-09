@@ -24,12 +24,14 @@ class YOLOPAFPN(nn.Module):
         depthwise=False,
         act="silu",
         backbone='CSPDarknet',
+        mobilenet_invertedt=None,
+        out_indices=None
     ):
         super().__init__()
         if backbone == "CSPDarknet":
             self.backbone = CSPDarknet(depth, width, depthwise=depthwise, act=act)
         elif backbone == "MobileNetV2":
-            self.backbone = MobileNetV2(widen_factor=width, pretrained=False)
+            self.backbone = MobileNetV2(widen_factor=width, inverted_residual_setting=mobilenet_invertedt, out_indices=out_indices,pretrained=False)
         self.in_features = in_features
         self.in_channels = in_channels
         Conv = DWConv if depthwise else BaseConv
@@ -118,4 +120,5 @@ class YOLOPAFPN(nn.Module):
         pan_out0 = self.C3_n4(p_out0)  # 1024->1024/32
 
         outputs = (pan_out2, pan_out1, pan_out0)
+        
         return outputs

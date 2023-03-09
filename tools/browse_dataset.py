@@ -31,7 +31,7 @@ if __name__ == "__main__":
     exp = get_exp(args.exp_file)
     
     swap = (1, 2, 0)
-    classes_name = ["person", "r"]
+    classes_name = ["person", "other"]
     # classes_name = ["person"]
     if args.phase == 'train':
         loader = exp.get_data_loader(batch_size=1, is_distributed=False)
