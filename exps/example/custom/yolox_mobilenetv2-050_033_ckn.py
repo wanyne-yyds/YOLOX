@@ -18,7 +18,7 @@ class Exp(MyExp):
         self.act = 'relu'                   #* 激活函数
         self.num_classes = 1                #* 类别数
         self.backbone_net = "MobileNetV2"   #? 网络选择(MobileNetV2, CSPDarknet)
-
+        self.out_indices = [6, 13, 17]
         # ---------------- dataloader config ---------------- #
         self.data_num_workers = 10          #* 工人数量
         self.input_size = (416, 416)        #* 输入尺寸(高, 宽)
@@ -68,7 +68,7 @@ class Exp(MyExp):
 
             # NANO model use depthwise = True, which is main difference.
             backbone = YOLOPAFPN(self.depth, self.width, in_features, in_channels=in_channels, act=self.act, \
-                depthwise=True, backbone=self.backbone_net)
+                depthwise=True, backbone=self.backbone_net, out_indices=self.out_indices)
             head = YOLOXHead(self.num_classes, self.width, in_channels=in_channels, act=self.act, depthwise=True)
             self.model = YOLOX(backbone, head)
 

@@ -16,7 +16,7 @@ class Exp(MyExp):
         self.depth = 0.33
         self.width = 0.50
         self.act = 'LeakyReLU'              #* 激活函数
-        self.num_classes = 2                #* 类别数
+        self.num_classes = 1                #* 类别数
         self.backbone_net = "MobileNetV2"   #? 网络选择(MobileNetV2, CSPDarknet)
         self.out_indices = [6, 12, 16]
         self.mobilenet_invertedt = [
@@ -31,15 +31,16 @@ class Exp(MyExp):
                                    ]
         self.conv_models_deploy = False
         self.depthwise = False
+        self.strides = [8, 16, 32, 64]
 
         # ---------------- dataloader config ---------------- #
         self.data_num_workers = 10          #* 工人数量
         self.input_size = (320, 576)        #* 输入尺寸(高, 宽)
         self.multiscale_range = 0           #* 0 关闭多尺度
-        self.data_dir = "/code/data/YOLOX-CocoFormat-BSD_Two_Classes-v0.0.1-2023-03-08_14:30:42"
+        self.data_dir = "/code/data/YOLOX-CocoFormat-BSD_One_Classes-v0.0.1-2023-03-10_10:45:54"
         self.train_ann = "instances_train2017.json"
         self.val_ann = "instances_val2017.json"
-        self.output_dir = "./YOLOX_outputs/YOLOX-BSD-Two_classes"
+        self.output_dir = "./YOLOX_outputs/YOLOX-BSD-ghostfpn-One_classes"
 
         # --------------- transform config ----------------- #
         self.mosaic_prob = 0.0              #* mosaic 概率
@@ -71,7 +72,7 @@ class Exp(MyExp):
                     m.eps = 1e-3
                     m.momentum = 0.03
         if "model" not in self.__dict__:
-            from yolox.models import YOLOX, YOLOGhostPAN, YOLOXHead
+            from yolox.models import YOLOX, YOLOGhostPAN, YOLOXHeadFour
 
             if self.backbone_net == 'CSPDarknet':
                 in_channels = [256, 512, 1024]          # C
@@ -83,8 +84,8 @@ class Exp(MyExp):
             backbone = YOLOGhostPAN(self.depth, self.width, in_features, in_channels=in_channels, act=self.act, \
                 depthwise=self.depthwise, backbone=self.backbone_net, mobilenet_invertedt=self.mobilenet_invertedt, out_indices=self.out_indices)
             
-            in_channels = [32, 32, 32] # ghostfpn 输出: in_c * width
-            head = YOLOXHead(self.num_classes, self.width, in_channels=in_channels, act=self.act, depthwise=self.depthwise, conv_models_deploy=self.conv_models_deploy)
+            in_channels = [32, 32, 32, 32] # ghostfpn 输出: in_c * width
+            head = YOLOXHeadFour(self.num_classes, self.width, strides=self.strides, in_channels=in_channels, out_c=32, act=self.act, depthwise=self.depthwise, conv_models_deploy=self.conv_models_deploy)
             self.model = YOLOX(backbone, head)
 
         self.model.apply(init_yolo)

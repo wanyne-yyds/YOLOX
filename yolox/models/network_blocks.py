@@ -419,6 +419,7 @@ def build_norm_layer(cfg, num_features, postfix=""):
 
 activations = {
     "ReLU": nn.ReLU,
+    "relu": nn.ReLU,
     "LeakyReLU": nn.LeakyReLU,
     "ReLU6": nn.ReLU6,
     "SELU": nn.SELU,
@@ -433,6 +434,7 @@ activations = {
 
 def act_layers(name):
     assert name in activations.keys()
+
     if name == "LeakyReLU":
         return nn.LeakyReLU(negative_slope=0.1, inplace=True)
     elif name == "GELU":

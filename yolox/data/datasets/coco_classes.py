@@ -4,5 +4,5 @@
 
 COCO_CLASSES = (
     "person"
-    "other"
 )
+    # "other"
