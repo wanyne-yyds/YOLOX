@@ -418,6 +418,7 @@ def build_norm_layer(cfg, num_features, postfix=""):
     return name, layer
 
 activations = {
+    "relu": nn.ReLU,
     "ReLU": nn.ReLU,
     "LeakyReLU": nn.LeakyReLU,
     "ReLU6": nn.ReLU6,

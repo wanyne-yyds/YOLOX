@@ -335,10 +335,10 @@ class WandbLogger(object):
             num_occurrences = defaultdict(int)
 
             id = val[0]
-            srcwidth, srcheight = val[2]               # 宽，高
+            srcheight, srcwidth = val[2]               # 宽，高
             img_height = val[1]._height
-            img_width = val[1]._height
-            ratio = min(img_height / srcheight, img_width / srcwidth)
+            img_width = val[1]._width
+            ratio = [img_height / srcheight, img_width / srcwidth]
             if isinstance(id, list):
                 id = id[0]
 
@@ -347,10 +347,10 @@ class WandbLogger(object):
                 boxes = []
                 for i in range(len(prediction["bboxes"])):
                     bbox = prediction["bboxes"][i]
-                    x0 = int(bbox[0] * ratio)
-                    y0 = int(bbox[1] * ratio)
-                    x1 = int(bbox[2] * ratio)
-                    y1 = int(bbox[3] * ratio)
+                    x0 = int(bbox[0] * ratio[1])
+                    y0 = int(bbox[1] * ratio[0])
+                    x1 = int(bbox[2] * ratio[1])
+                    y1 = int(bbox[3] * ratio[0])
                     box = {
                         "position": {
                             "minX": min(x0, x1),

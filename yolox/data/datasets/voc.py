@@ -162,8 +162,15 @@ class VOCDetection(CacheDataset):
         res, img_info = self.target_transform(target)
         height, width = img_info
 
-        r = min(self.img_size[0] / height, self.img_size[1] / width)
-        res[:, :4] *= r
+        # r = min(self.img_size[0] / height, self.img_size[1] / width)
+        # res[:, :4] *= r
+
+        r = self.img_size[0] / height, self.img_size[1] / width
+        res[:, 0] *= r[1]
+        res[:, 1] *= r[0]
+        res[:, 2] *= r[1]
+        res[:, 3] *= r[0]
+
         resized_info = (int(height * r), int(width * r))
 
         return (res, img_info, resized_info)
