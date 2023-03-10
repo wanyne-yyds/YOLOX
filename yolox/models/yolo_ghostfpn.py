@@ -108,11 +108,11 @@ class YOLOGhostPAN(nn.Module):
         out_indices=None,
 
         depthwise=False,
-        kernel_size=5,
+        kernel_size=3,
         expand=1,
         num_blocks=1,
         use_res=False,
-        num_extra_level=0,
+        num_extra_level=1,
         upsample_cfg=dict(scale_factor=2, mode="bilinear"),
         norm_cfg=dict(type="BN"),
     ):

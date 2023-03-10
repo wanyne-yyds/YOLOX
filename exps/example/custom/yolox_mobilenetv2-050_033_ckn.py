@@ -19,7 +19,6 @@ class Exp(MyExp):
         self.num_classes = 1                #* 类别数
         self.backbone_net = "MobileNetV2"   #? 网络选择(MobileNetV2, CSPDarknet)
         self.out_indices = [6, 13, 17]
-
         # ---------------- dataloader config ---------------- #
         self.data_num_workers = 10          #* 工人数量
         self.input_size = (416, 416)        #* 输入尺寸(高, 宽)
