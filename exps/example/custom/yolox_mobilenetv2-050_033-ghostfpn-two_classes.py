@@ -32,6 +32,10 @@ class Exp(MyExp):
         self.conv_models_deploy = False
         self.depthwise = False
         self.strides = [8, 16, 32, 64]
+        self.Head_in_channels = [32, 32, 32, 32] # ghostfpn 输出: in_c * width
+        self.Head_out_channels = 32
+        self.reg_iou_type = 'giou'
+        self.cls_weight = [1, 1]
 
         # ---------------- dataloader config ---------------- #
         self.data_num_workers = 10          #* 工人数量
@@ -55,11 +59,11 @@ class Exp(MyExp):
 
         # --------------  training config --------------------- #
         self.warmup_epochs = 5              #* 热身
-        self.max_epoch = 100                #* 最大 epoch
+        self.max_epoch = 160                #* 最大 epoch
         self.basic_lr_per_img = 0.01 / 64.0 #* LR
         self.no_aug_epochs = 0              #* 多少 epoch 关闭 mosaic 増强
         self.eval_interval = 10             #* 验证 epoch
-        self.print_interval = 100
+        self.print_interval = 400
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
 
         # -----------------  testing config ------------------ #
@@ -84,8 +88,8 @@ class Exp(MyExp):
             backbone = YOLOGhostPAN(self.depth, self.width, in_features, in_channels=in_channels, act=self.act, \
                 depthwise=self.depthwise, backbone=self.backbone_net, mobilenet_invertedt=self.mobilenet_invertedt, out_indices=self.out_indices)
             
-            in_channels = [32, 32, 32, 32] # ghostfpn 输出: in_c * width
-            head = YOLOXHeadFour(self.num_classes, self.width, strides=self.strides, in_channels=in_channels, out_c=32, act=self.act, depthwise=self.depthwise, conv_models_deploy=self.conv_models_deploy)
+            head = YOLOXHeadFour(self.num_classes, self.width, strides=self.strides, in_channels=self.Head_in_channels, out_c=self.Head_out_channels, \
+                                 act=self.act, depthwise=True, iou_type=self.reg_iou_type, cls_weight=self.cls_weight, conv_models_deploy=self.conv_models_deploy)
             self.model = YOLOX(backbone, head)
 
         self.model.apply(init_yolo)

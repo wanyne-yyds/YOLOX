@@ -10,8 +10,8 @@ from tools.pascal_voc_xml2json import get, get_and_check
 
 
 if __name__ == '__main__':
-    dataset = '/code/data/s_BSD/ckn_bsd_cocoformat'
-    outpath = '/code/data/s_BSD/ckn_bsd_cocoformat_v0.0.1'
+    dataset = '/code/data/s_ADAS'
+    outpath = '/code/data/s_ADAS_traffic_light'
 
     labelfile = Path(dataset).rglob('*.xml')
 
@@ -26,10 +26,13 @@ if __name__ == '__main__':
         for obj in get(root, 'object'):
             category = get_and_check(obj, 'name', 1).text
             classes.append(category)
-            if category == "rearview mirror":
-                imgfile = file.replace('Annotations', 'JPEGImages').replace('xml', 'jpg').replace('xml', 'png')               
+            if category == "traffic_light":
+                imgfile = file.replace('Annotations', 'JPEGImages').replace('.xml', '.jpg')
                 out_label_path = file.replace(dataset, outpath)
-                out_image_path = out_label_path.replace('Annotations', 'JPEGImages').replace('xml', 'jpg').replace('xml', 'png')
+                out_image_path = out_label_path.replace('Annotations', 'JPEGImages').replace('.xml', '.jpg')
+                if not osp.exists(imgfile):
+                    imgfile = imgfile.replace('.jpg', '.png')
+                    out_image_path = out_image_path.replace('.jpg', '.png')
                 os.makedirs(osp.split(out_label_path)[0], exist_ok=True)
                 os.makedirs(osp.split(out_image_path)[0], exist_ok=True)
                 shutil.move(imgfile, out_image_path)

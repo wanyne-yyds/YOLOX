@@ -46,8 +46,8 @@
 #       --thredhold arg           当启用 --testdir 后,设置正确性校验的误差允可范围
 #                                 若不设置,默认是 0.01
 
-onnxmodelpath=/home/ckn/Code/YOLOv3/model_wh_416_128_bw_0.25_fw_0.25_t_6_b_400_i_1_warp_epoch_100_2022-11-08-06-37-08_sim.onnx
-mnnmodelpath=/home/ckn/Code/YOLOv3/model_wh_416_128_bw_0.25_fw_0.25_t_6_b_400_i_1_warp_epoch_100_2022-11-08-06-37-08_sim.mnn
+onnxmodelpath=/home/ckn/Code/YOLOX/yolox.onnx
+mnnmodelpath=/home/ckn/Code/YOLOX/yolox.mnn
 
 /home/ckn/library/MNN/build/MNNConvert -f ONNX \
 --modelFile ${onnxmodelpath} \
