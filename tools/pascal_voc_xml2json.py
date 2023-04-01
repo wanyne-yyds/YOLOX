@@ -1,21 +1,22 @@
 #coding:utf-8
- 
- 
 import os
+import cv2
+import time
 import json
 import shutil
 import numpy as np
-import time
-import xml.etree.ElementTree as ET
-from pathlib import Path 
+import os.path as osp
+from pathlib import Path
+from collections import Counter
 from prettytable import PrettyTable
+from xml.etree import ElementTree as ET
 
-path2 = "/code/data/YOLOX-CocoFormat-BSD_One_Classes-v0.0.1-%s/"%(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())) # 输出文件夹
-classes = [ "person"]
-train_xml_dir = "/code/data/s_BSD/ckn_bsd_cocoformat_v0.0.1/Annotations/train/"         # xml文件
-val_xml_dir   = "/code/data/s_BSD/ckn_bsd_cocoformat_v0.0.1/Annotations/val/"           # xml文件
-train_img_dir = "/code/data/s_BSD/ckn_bsd_cocoformat_v0.0.1/JPEGImages/train"           # 图片
-val_img_dir   = "/code/data/s_BSD/ckn_bsd_cocoformat_v0.0.1/JPEGImages/val"             # 图片
+path2 = "/code/data/YOLOX-CocoFormat-BSD_Two_Classes-New-%s/"%(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())) # 输出文件夹
+classes = [ "person", "other"]
+# train_xml_dir = "/Annotations/train/"         # xml文件
+# val_xml_dir   = "/Annotations/val/"           # xml文件
+train_img_dir = "/code/data/s_BSD/ckn_bsd_cocoformat_1/JPEGImages/train"           # 图片
+val_img_dir   = "/code/data/s_BSD/ckn_bsd_cocoformat_1/JPEGImages/val"             # 图片
 
 # train_ratio = 1.0 # 训练集的比例
 
@@ -33,40 +34,37 @@ def get_and_check(root, name, length):
     if length == 1:
         vars = vars[0]
     return vars
-  
-def convert(xml_list, json_file, txt_file):
+
+def convert(img_list, json_file, txt_file):
     json_dict = {"images": [], "type": "instances", "annotations": [], "categories": []}
     categories = pre_define_categories.copy()
     bnd_id = START_BOUNDING_BOX_ID
-    all_categories = {}
-    for index, line in enumerate(xml_list):
+    all_categories = []
+    for index, line in enumerate(img_list):
         # print("Processing %s"%(line))
-        xml_f = line
-        tree = ET.parse(xml_f)
-        root = tree.getroot()
-        filename = os.path.basename(xml_f)[:-4] + ".jpg"
-        imgpath = str(xml_f).replace('Annotations', 'JPEGImages')[:-4] + ".jpg"
-        if not os.path.isfile(imgpath):
-            filename = os.path.basename(imgpath)[:-4] + ".png"
+        img_f = line
+        xml_f = str(img_f).replace('JPEGImages', 'Annotations')[:-4] + ".xml"
+        filename = osp.basename(img_f)
         image_id = 20190000001 + index
-        size = get_and_check(root, 'size', 1)
-        width = int(get_and_check(size, 'width', 1).text)
-        height = int(get_and_check(size, 'height', 1).text)
+        if not osp.exists(xml_f) and img_f.find('/neg/') != -1:
+            height, width, _ = cv2.imread(str(img_f)).shape
+        else:
+            tree = ET.parse(xml_f)
+            root = tree.getroot()
+            size = get_and_check(root, 'size', 1)
+            width = int(get_and_check(size, 'width', 1).text)
+            height = int(get_and_check(size, 'height', 1).text)
         image = {'file_name': filename, 'height': height, 'width': width, 'id':image_id}
         json_dict['images'].append(image)
+
         ## Cruuently we do not support segmentation
         #  segmented = get_and_check(root, 'segmented', 1).text
         #  assert segmented == '0'
         for obj in get(root, 'object'):
             category = get_and_check(obj, 'name', 1).text
-            if category == 'rearview mirror':
-                category = 'other'
-            if category == 'personD':
-                category = 'person'
-            if category in all_categories:
-                all_categories[category] += 1
-            else:
-                all_categories[category] = 1
+            if category == "rearview mirror":
+                category = "other"
+            all_categories.append(category)
             if category not in categories:
                 if only_care_pre_define_categories:
                     continue
@@ -84,9 +82,9 @@ def convert(xml_list, json_file, txt_file):
             o_width = abs(xmax - xmin)
             o_height = abs(ymax - ymin)
             ann = {'area': o_width*o_height, 'iscrowd': 0, 'image_id':
-                   image_id, 'bbox':[xmin, ymin, o_width, o_height],
-                   'category_id': category_id, 'id': bnd_id, 'ignore': 0,
-                   'segmentation': []}
+                image_id, 'bbox':[xmin, ymin, o_width, o_height],
+                'category_id': category_id, 'id': bnd_id, 'ignore': 0,
+                'segmentation': []}
             json_dict['annotations'].append(ann)
             bnd_id = bnd_id + 1
  
@@ -98,13 +96,14 @@ def convert(xml_list, json_file, txt_file):
     json_fp.write(json_str)
     json_fp.close()
     print("------------create {} done--------------".format(json_file))
-    print("find {} categories: {} -->>> your pre_define_categories {}: {}".format(len(all_categories), all_categories.keys(), len(pre_define_categories), pre_define_categories.keys()))
+    # print("find {} categories: {} -->>> your pre_define_categories {}: {}".format(len(all_categories), all_categories.keys(), len(pre_define_categories), pre_define_categories.keys()))
     print("category: id --> {}".format(categories))
     print(categories.keys())
     print(categories.values())
     f = open('%s %sClassessQuantity.txt'%(path2, txt_file), 'w')
     table = PrettyTable([ '类别', '数量'])
-    for keys, values in all_categories.items():
+    count = Counter(all_categories)
+    for keys, values in count.items():
         table.add_row([keys, values])
     print(table)
     print("Dataset Quantity: %d"%(index))
@@ -130,43 +129,38 @@ if __name__ == '__main__':
     if os.path.exists(path2 + "/val2017"):
         shutil.rmtree(path2 +"/val2017")
     os.makedirs(path2 + "/val2017", exist_ok=True)
-    
 
     save_json_train = path2 + 'annotations/instances_train2017.json'
     save_json_val = path2 + 'annotations/instances_val2017.json'
 
-    train_xml_list = list(str(i) for i in Path(train_xml_dir).rglob("**/*.xml"))
-    train_xml_list = np.sort(train_xml_list)
+    train_img_list = list(str(i) for i in Path(train_img_dir).rglob("**/*.*g"))
+    train_img_list = np.sort(train_img_list)
     np.random.seed(100)
-    np.random.shuffle(train_xml_list)
+    np.random.shuffle(train_img_list)
 
-    val_xml_list = list(str(i) for i in Path(val_xml_dir).rglob("**/*.xml"))
-    val_xml_list = np.sort(val_xml_list)
+    val_img_list = list(str(i) for i in Path(val_img_dir).rglob("**/*.*g"))
+    val_img_list = np.sort(val_img_list)
     np.random.seed(100)
-    np.random.shuffle(val_xml_list)
+    np.random.shuffle(val_img_list)
 
-    convert(train_xml_list, save_json_train, "Train")
-    convert(val_xml_list, save_json_val, "Val")
+    convert(train_img_list, save_json_train, "Train")
+    convert(val_img_list, save_json_val, "Val")
 
     f1 = open(path2 + "train.txt", "w")
-    for xml in train_xml_list:
-        img = str(xml).replace('Annotations', 'JPEGImages')[:-4] + ".jpg"
-        if not os.path.isfile(img):
-            img = str(xml).replace('Annotations', 'JPEGImages')[:-4] + ".png"
-        f1.write(os.path.basename(xml)[:-4] + "\n")
-        train_image_pathname = path2 + "/train2017/" + os.path.basename(img)
-        shutil.copyfile(img, train_image_pathname)
+    for imgfile in train_img_list:
+        img_name = osp.basename(imgfile)[:-4] + "\n"
+        f1.write(img_name)
+        train_image_pathname = path2 + "/train2017/" + osp.basename(imgfile)
+        shutil.copyfile(imgfile, train_image_pathname)
 
     f2 = open(path2 + "test.txt", "w")
-    for xml in val_xml_list:
-        img = str(xml).replace('Annotations', 'JPEGImages')[:-4] + ".jpg"
-        if not os.path.isfile(img):
-            img = str(xml).replace('Annotations', 'JPEGImages')[:-4] + ".png"
-        f2.write(os.path.basename(xml)[:-4] + "\n")
-        val_image_pathname = path2 + "/val2017/" + os.path.basename(img)
-        shutil.copyfile(img, val_image_pathname)
+    for imgfile in val_img_list:
+        img_name = osp.basename(imgfile)[:-4] + "\n"
+        f2.write(img_name)
+        val_image_pathname = path2 + "/val2017/" + os.path.basename(imgfile)
+        shutil.copyfile(imgfile, val_image_pathname)
     f1.close()
     f2.close()
     print("-------------------------------")
-    print("train number:", len(train_xml_list))
-    print("val number:", len(val_xml_list))
+    print("train number:", len(train_img_list))
+    print("val number:", len(val_img_list))

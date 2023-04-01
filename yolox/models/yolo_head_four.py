@@ -422,7 +422,7 @@ class YOLOXHeadFour(nn.Module):
             self.iou_loss(bbox_preds.view(-1, 4)[fg_masks], reg_targets)
         ).sum() / num_fg
         loss_obj = (
-            self.focalloss(obj_preds.view(-1, 1), obj_targets)
+            self.bcewithlog_loss(obj_preds.view(-1, 1), obj_targets)
         ).sum() / num_fg
         loss_cls = (
             self.bcewithlog_loss_cls(

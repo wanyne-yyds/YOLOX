@@ -49,7 +49,7 @@ def make_parser():
     parser.add_argument(
         "--input_shape",
         type=str,
-        default="640,640",
+        default="320,576",
         help="Specify an input shape for inference.",
     )
     return parser
@@ -68,7 +68,7 @@ if __name__ == '__main__':
         session = onnxruntime.InferenceSession(args.model)
         ort_inputs = {session.get_inputs()[0].name: img[None, :, :, :]}
         output = session.run(None, ort_inputs)
-        predictions = demo_postprocess(output[0], input_shape)[0]
+        predictions = demo_postprocess(output[0], input_shape, p6=False)[0]
 
         boxes = predictions[:, :4]
         scores = predictions[:, 4:5] * predictions[:, 5:]
@@ -85,10 +85,9 @@ if __name__ == '__main__':
 
         dets = multiclass_nms(boxes_xyxy, scores, nms_thr=0.45, score_thr=0.1)
 
-        mkdir(args.output_dir)
-        output_path = os.path.join(args.output_dir, os.path.basename(imgpath))
-        output_txt = output_path.replace('jpg', 'txt').replace('png', 'txt')
-        with open(output_txt, 'w') as f:
+        output_path = imgpath.replace(args.image_path, args.output_dir).replace('jpg', 'txt').replace('png', 'txt')
+        os.makedirs(os.path.split(output_path)[0], exist_ok=True)
+        with open(output_path, 'w') as f:
             if dets is not None:
                 final_boxes, final_scores, final_cls_inds = dets[:, :4], dets[:, 4], dets[:, 5]
                 origin_img = vis(origin_img, final_boxes, final_scores, final_cls_inds,
@@ -100,7 +99,7 @@ if __name__ == '__main__':
                         continue
                     xmin, ymin, xmax, ymax = box
                     xmin, ymin, xmax, ymax = map(lambda x: str(round(x + 0.5)), (xmin, ymin, xmax, ymax))
-                    cls_ = COCO_CLASSES
+                    cls_ = COCO_CLASSES[int(final_cls_inds[index])]
                     scores_s = '%.2f'%scores_i
                     strxy = cls_+" "+scores_s+" "+xmin+" "+ymin+" "+xmax+" "+ymax
                     f.writelines(strxy+'\n')

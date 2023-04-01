@@ -145,13 +145,13 @@ def preproc(img, input_size, swap=(2, 0, 1)):
     else:
         padded_img = np.ones(input_size, dtype=np.uint8) * 114
 
-    r = min(input_size[0] / img.shape[0], input_size[1] / img.shape[1])
+    r = input_size[0] / img.shape[0], input_size[1] / img.shape[1]
     resized_img = cv2.resize(
         img,
-        (int(img.shape[1] * r), int(img.shape[0] * r)),
+        (int(img.shape[1] * r[1]), int(img.shape[0] * r[0])),
         interpolation=cv2.INTER_LINEAR,
     ).astype(np.uint8)
-    padded_img[: int(img.shape[0] * r), : int(img.shape[1] * r)] = resized_img
+    padded_img[: int(img.shape[0] * r[0]), : int(img.shape[1] * r[1])] = resized_img
 
     padded_img = padded_img.transpose(swap)
     padded_img = np.ascontiguousarray(padded_img, dtype=np.float32)
@@ -187,7 +187,10 @@ class TrainTransform:
         image_t, r_ = preproc(image_t, input_dim)
         # boxes [xyxy] 2 [cx,cy,w,h]
         boxes = xyxy2cxcywh(boxes)
-        boxes *= r_
+        boxes[:, 0] *= r_[1]
+        boxes[:, 1] *= r_[0]
+        boxes[:, 2] *= r_[1]
+        boxes[:, 3] *= r_[0]
 
         mask_b = np.minimum(boxes[:, 2], boxes[:, 3]) > 1
         boxes_t = boxes[mask_b]
@@ -195,7 +198,10 @@ class TrainTransform:
 
         if len(boxes_t) == 0:
             image_t, r_o = preproc(image_o, input_dim)
-            boxes_o *= r_o
+            boxes_o[:, 0] *= r_o[1]
+            boxes_o[:, 1] *= r_o[0]
+            boxes_o[:, 2] *= r_o[1]
+            boxes_o[:, 3] *= r_o[0]
             boxes_t = boxes_o
             labels_t = labels_o
 
