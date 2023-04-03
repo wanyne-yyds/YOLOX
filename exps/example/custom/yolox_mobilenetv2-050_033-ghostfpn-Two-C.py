@@ -47,8 +47,8 @@ class Exp(MyExp):
         self.output_dir = "./YOLOX_outputs/YOLOX-BSD-ghostfpn-Two_classes"
 
         # --------------- transform config ----------------- #
-        self.mosaic_prob = 0.0              #* mosaic 概率
-        self.mixup_prob = 1.0               #* mixup 概率
+        self.mosaic_prob = -1               #* mosaic 概率
+        self.mixup_prob = -1                #* mixup 概率
         self.hsv_prob = 1.0
         self.flip_prob = 0.5                
         self.degrees = 10.0                 #* 旋转角范围 (-2, 2)
@@ -61,7 +61,7 @@ class Exp(MyExp):
         self.warmup_epochs = 5              #* 热身
         self.max_epoch = 160                #* 最大 epoch
         self.basic_lr_per_img = 0.01 / 64.0 #* LR
-        self.no_aug_epochs = 0              #* 多少 epoch 关闭 mosaic 増强
+        self.no_aug_epochs = -1             #* 多少 epoch 关闭 mosaic 増强
         self.eval_interval = 10             #* 验证 epoch
         self.print_interval = 400
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
