@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding:utf-8 -*-
-# Copyright (c) 2014-2021 Megvii Inc. All rights reserved.
+# Copyright (c) Megvii Inc. All rights reserved.
 
 import numpy as np
 
@@ -17,6 +16,7 @@ __all__ = [
     "xyxy2xywh",
     "xyxy2cxcywh",
     "bboxes_iou_batch",
+    "cxcywh2xyxy",
 ]
 
 
@@ -186,3 +186,10 @@ def bboxes_iou_batch(bboxes_a, bboxes_b, xyxy=True):
 
     union = area_a + area_b - inter + 1e-9
     return inter / union  # [N, A, B]
+
+def cxcywh2xyxy(bboxes):
+    bboxes[:, 0] = bboxes[:, 0] - bboxes[:, 2] * 0.5
+    bboxes[:, 1] = bboxes[:, 1] - bboxes[:, 3] * 0.5
+    bboxes[:, 2] = bboxes[:, 0] + bboxes[:, 2]
+    bboxes[:, 3] = bboxes[:, 1] + bboxes[:, 3]
+    return bboxes
