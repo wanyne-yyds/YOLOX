@@ -13,6 +13,10 @@ from loguru import logger
 from tabulate import tabulate
 from tqdm import tqdm
 
+from pathlib import Path
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
+
 import numpy as np
 
 import torch
@@ -114,7 +118,7 @@ class COCOEvaluator:
         self.per_class_AR = per_class_AR
 
     def evaluate(
-        self, model, distributed=False, half=False, trt_file=None,
+        self, model, save_dir, distributed=False, half=False, trt_file=None,
         decoder=None, test_size=None, return_outputs=False
     ):
         """
@@ -138,6 +142,8 @@ class COCOEvaluator:
             model = model.half()
         ids = []
         data_list = []
+        pr_gt = []
+        pr_dt = []
         output_data = defaultdict()
         progress_bar = tqdm if is_main_process() else iter
 
@@ -155,7 +161,7 @@ class COCOEvaluator:
             model(x)
             model = model_trt
 
-        for cur_iter, (imgs, _, info_imgs, ids) in enumerate(
+        for cur_iter, (imgs, reg, info_imgs, ids) in enumerate(
             progress_bar(self.dataloader)
         ):
             with torch.no_grad():
@@ -183,9 +189,13 @@ class COCOEvaluator:
 
             data_list_elem, image_wise_data = self.convert_to_coco_format(
                 outputs, info_imgs, ids, return_outputs=True)
+            gt_, dt_ = self.convert_to_pr_format(outputs, info_imgs, reg)
+            pr_gt.extend(gt_)
+            pr_dt.extend(dt_)
             data_list.extend(data_list_elem)
             output_data.update(image_wise_data)
 
+        pr_content = self.process_batch(pr_dt, pr_gt, save_dir)
         statistics = torch.cuda.FloatTensor([inference_time, nms_time, n_samples])
         if distributed:
             # different process/device might have different speed,
@@ -202,7 +212,7 @@ class COCOEvaluator:
 
         if return_outputs:
             return eval_results, output_data
-        return eval_results
+        return eval_results, pr_content
 
     def convert_to_coco_format(self, outputs, info_imgs, ids, return_outputs=False):
         data_list = []
@@ -223,6 +233,9 @@ class COCOEvaluator:
             bboxes /= scale
 
             cls = output[:, 6]
+            if len(self.dataloader.dataset.class_ids) == 4:
+                cls[cls==1] = 0
+                
             scores = output[:, 4] * output[:, 5]
 
             image_wise_data.update({
@@ -316,3 +329,226 @@ class COCOEvaluator:
             return cocoEval.stats[0], cocoEval.stats[1], info
         else:
             return 0, 0, info
+
+    def convert_to_pr_format(self, outputs, info_imgs, targets):
+        data_list = []
+        gt_list = []
+        nlabel = (targets.sum(dim=2) > 0).sum(dim=1)
+        for index, (output, img_h, img_w) in enumerate(zip(
+            outputs, info_imgs[0], info_imgs[1])
+        ):
+            if output is None:
+                continue
+            device = output.device
+            output = output.cpu()
+
+            bboxes = output[:, 0:4]
+            num_gt = int(nlabel[index])
+            scale = self.img_size[0] / float(img_h), self.img_size[1] / float(img_w)
+            bboxes[:, 0] /= scale[1]
+            bboxes[:, 2] /= scale[1]
+            bboxes[:, 1] /= scale[0]
+            bboxes[:, 3] /= scale[0]    #! xyxy format
+            # bboxes = xyxy2xywh(bboxes)
+            if num_gt == 0:
+                gts = targets.new_zeros((0, 5))
+            else:
+                gt_bboxes = targets[index, :num_gt, 0:4]
+                gt_classes = targets[index, :num_gt, 4].reshape(-1, 1)
+                gt_bboxes[:, 0] /= scale[1]
+                gt_bboxes[:, 2] /= scale[1]
+                gt_bboxes[:, 1] /= scale[0]
+                gt_bboxes[:, 3] /= scale[0]    #! xyxy format
+                gts = torch.cat((gt_classes, gt_bboxes), 1) #* cls,xyxy
+
+            cls = output[:, 6].reshape(-1, 1)
+            scores = (output[:, 4] * output[:, 5]).reshape(-1, 1)
+            per = torch.cat((bboxes, scores, cls), 1)
+            data_list.append(per.to(device))
+            gt_list.append(gts.to(device))
+
+        return gt_list, data_list
+
+    def process_batch(self, detections, labels, save_dir):
+        def box_iou(box1, box2):
+            def box_area(box):
+                # box = xyxy(4,n)
+                return (box[2] - box[0]) * (box[3] - box[1])
+            # inter(N,M) = (rb(N,M,2) - lt(N,M,2)).clamp(0).prod(2)
+            (a1, a2), (b1, b2) = box1[:, None].chunk(2, 2), box2.chunk(2, 1)
+            inter = (torch.min(a2, b2) - torch.max(a1, b1)).clamp(0).prod(2)
+
+            # IoU = inter / (area1 + area2 - inter)
+            return inter / (box_area(box1.T)[:, None] + box_area(box2.T) - inter)
+
+        device = detections[0].device
+        jdict, stats, ap, ap_class = [], [], [], []
+        iouv = torch.linspace(0.5, 0.95, 10, device=device)  # iou vector for mAP@0.5:0.95
+        niou = iouv.numel()
+        for id, pr in enumerate(detections):
+            nl = len(labels[id])
+            tcls = labels[id][:, 0].tolist() if nl else []  # target class
+            if len(pr) == 0:
+                if nl:
+                    stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls))
+                continue
+            if nl:
+                correct = torch.zeros(pr.shape[0], iouv.shape[0], dtype=torch.bool, device=iouv.device)
+                iou = box_iou(labels[id][:, 1:], pr[:, :4])
+                x = torch.where((iou >= iouv[0]) & (labels[id][:, 0:1] == pr[:, 5]))  # IoU above threshold and classes match
+                if x[0].shape[0]:
+                    matches = torch.cat((torch.stack(x, 1), iou[x[0], x[1]][:, None]), 1).cpu().numpy()  # [label, detection, iou]
+                    if x[0].shape[0] > 1:
+                        matches = matches[matches[:, 2].argsort()[::-1]]
+                        matches = matches[np.unique(matches[:, 1], return_index=True)[1]]
+                        # matches = matches[matches[:, 2].argsort()[::-1]]
+                        matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
+                    matches = torch.from_numpy(matches).to(iouv.device)
+                    correct[matches[:, 1].long()] = matches[:, 2:3] >= iouv
+            else:
+                correct = torch.zeros(pr.shape[0], niou, dtype=torch.bool)
+            stats.append((correct.cpu(), pr[:, 4].cpu(), pr[:, 5].cpu(), tcls))  # (correct, conf, pcls, tcls)
+
+        # Compute metrics
+        stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
+        tp, fp, p, r, f1, ap, ap_class = self.ap_per_class(*stats, plot=True, save_dir=save_dir)
+        ap50, ap = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
+        mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
+        info = "\n metrics/precision: %f; metrics/recall: %f; metrics/mAP_0.5: %f; metrics/mAP_0.5:0.95: %f \n"%(mp, mr, map50, map)
+        return info
+
+    def ap_per_class(self, tp, conf, pred_cls, target_cls, plot=False, save_dir='.', eps=1e-16):
+        """ Compute the average precision, given the recall and precision curves.
+        Source: https://github.com/rafaelpadilla/Object-Detection-Metrics.
+        # Arguments
+            tp:  True positives (nparray, nx1 or nx10).
+            conf:  Objectness value from 0-1 (nparray).
+            pred_cls:  Predicted object classes (nparray).
+            target_cls:  True object classes (nparray).
+            plot:  Plot precision-recall curve at mAP@0.5
+            save_dir:  Plot save directory
+        # Returns
+            The average precision as computed in py-faster-rcnn.
+        """
+
+        # Sort by objectness
+        i = np.argsort(-conf)
+        tp, conf, pred_cls = tp[i], conf[i], pred_cls[i]
+
+        # Find unique classes
+        unique_classes, nt = np.unique(target_cls, return_counts=True)
+        nc = unique_classes.shape[0]  # number of classes, number of detections
+
+        # Create Precision-Recall curve and compute AP for each class
+        px, py = np.linspace(0, 1, 1000), []  # for plotting
+        ap, p, r = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000))
+        for ci, c in enumerate(unique_classes):
+            i = pred_cls == c
+            n_l = nt[ci]  # number of labels
+            n_p = i.sum()  # number of predictions
+
+            if n_p == 0 or n_l == 0:
+                continue
+            else:
+                # Accumulate FPs and TPs
+                fpc = (1 - tp[i]).cumsum(0)
+                tpc = tp[i].cumsum(0)
+
+                # Recall
+                recall = tpc / (n_l + eps)  # recall curve
+                r[ci] = np.interp(-px, -conf[i], recall[:, 0], left=0)  # negative x, xp because xp decreases
+
+                # Precision
+                precision = tpc / (tpc + fpc)  # precision curve
+                p[ci] = np.interp(-px, -conf[i], precision[:, 0], left=1)  # p at pr_score
+
+                # AP from recall-precision curve
+                for j in range(tp.shape[1]):
+                    ap[ci, j], mpre, mrec = self.compute_ap(recall[:, j], precision[:, j])
+                    if plot and j == 0:
+                        py.append(np.interp(px, mrec, mpre))  # precision at mAP@0.5
+
+        # Compute F1 (harmonic mean of precision and recall)
+        f1 = 2 * p * r / (p + r + eps)
+        names = {k: v for k, v in enumerate(COCO_CLASSES)}
+        names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
+        names = {i: v for i, v in enumerate(names)}  # to dict
+        if plot:
+            self.plot_pr_curve(px, py, ap, Path(save_dir) / 'PR_curve.png', names)
+            self.plot_mc_curve(px, f1, Path(save_dir) / 'F1_curve.png', names, ylabel='F1')
+            self.plot_mc_curve(px, p, Path(save_dir) / 'P_curve.png', names, ylabel='Precision')
+            self.plot_mc_curve(px, r, Path(save_dir) / 'R_curve.png', names, ylabel='Recall')
+
+        i = f1.mean(0).argmax()  # max F1 index
+        p, r, f1 = p[:, i], r[:, i], f1[:, i]
+        tp = (r * nt).round()  # true positives
+        fp = (tp / (p + eps) - tp).round()  # false positives
+        return tp, fp, p, r, f1, ap, unique_classes.astype('int32')
+
+
+    def compute_ap(self, recall, precision):
+        """ Compute the average precision, given the recall and precision curves
+        # Arguments
+            recall:    The recall curve (list)
+            precision: The precision curve (list)
+        # Returns
+            Average precision, precision curve, recall curve
+        """
+
+        # Append sentinel values to beginning and end
+        mrec = np.concatenate(([0.0], recall, [1.0]))
+        mpre = np.concatenate(([1.0], precision, [0.0]))
+
+        # Compute the precision envelope
+        mpre = np.flip(np.maximum.accumulate(np.flip(mpre)))
+
+        # Integrate area under curve
+        method = 'interp'  # methods: 'continuous', 'interp'
+        if method == 'interp':
+            x = np.linspace(0, 1, 101)  # 101-point interp (COCO)
+            ap = np.trapz(np.interp(x, mrec, mpre), x)  # integrate
+        else:  # 'continuous'
+            i = np.where(mrec[1:] != mrec[:-1])[0]  # points where x axis (recall) changes
+            ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])  # area under curve
+
+        return ap, mpre, mrec
+
+    def plot_pr_curve(self, px, py, ap, save_dir='pr_curve.png', names=()):
+        # Precision-recall curve
+        fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
+        py = np.stack(py, axis=1)
+
+        if 0 < len(names) < 21:  # display per-class legend if < 21 classes
+            for i, y in enumerate(py.T):
+                ax.plot(px, y, linewidth=1, label=f'{names[i]} {ap[i, 0]:.3f}')  # plot(recall, precision)
+        else:
+            ax.plot(px, py, linewidth=1, color='grey')  # plot(recall, precision)
+
+        ax.plot(px, py.mean(1), linewidth=3, color='blue', label='all classes %.3f mAP@0.5' % ap[:, 0].mean())
+        ax.set_xlabel('Recall')
+        ax.set_ylabel('Precision')
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+        fig.savefig(Path(save_dir), dpi=250)
+        plt.close()
+
+    def plot_mc_curve(self, px, py, save_dir='mc_curve.png', names=(), xlabel='Confidence', ylabel='Metric'):
+        # Metric-confidence curve
+        fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
+
+        if 0 < len(names) < 21:  # display per-class legend if < 21 classes
+            for i, y in enumerate(py):
+                ax.plot(px, y, linewidth=1, label=f'{names[i]}')  # plot(confidence, metric)
+        else:
+            ax.plot(px, py.T, linewidth=1, color='grey')  # plot(confidence, metric)
+
+        y = py.mean(0)
+        ax.plot(px, y, linewidth=3, color='blue', label=f'all classes {y.max():.2f} at {px[y.argmax()]:.3f}')
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+        fig.savefig(Path(save_dir), dpi=250)
+        plt.close()

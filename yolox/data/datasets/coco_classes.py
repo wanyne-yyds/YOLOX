@@ -4,5 +4,7 @@
 
 COCO_CLASSES = (
     "person",
-    "other"
+    "personD",
+    "other",
+    "ignore",
 )

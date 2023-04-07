@@ -84,6 +84,7 @@ class Exp(BaseExp):
 
         # weight decay of optimizer
         self.weight_decay = 5e-4
+        self.optim_type = "SGD"
         # momentum of optimizer
         self.momentum = 0.9
         # log period in iter, for example,
@@ -268,10 +269,14 @@ class Exp(BaseExp):
                     pg0.append(v.weight)  # no decay
                 elif hasattr(v, "weight") and isinstance(v.weight, nn.Parameter):
                     pg1.append(v.weight)  # apply decay
-
-            optimizer = torch.optim.SGD(
-                pg0, lr=lr, momentum=self.momentum, nesterov=True
-            )
+            if self.optim_type == "SGD":
+                optimizer = torch.optim.SGD(
+                    pg0, lr=lr, momentum=self.momentum, nesterov=True
+                )
+            elif self.optim_type == "AdamW":
+                optimizer = torch.optim.AdamW(
+                    pg0, lr=lr, 
+                )
             optimizer.add_param_group(
                 {"params": pg1, "weight_decay": self.weight_decay}
             )  # add pg1 with weight_decay
@@ -348,5 +353,5 @@ class Exp(BaseExp):
         # NOTE: trainer shouldn't be an attribute of exp object
         return trainer
 
-    def eval(self, model, evaluator, is_distributed, half=False, return_outputs=False):
-        return evaluator.evaluate(model, is_distributed, half, return_outputs=return_outputs)
+    def eval(self, model, save_pr_path, evaluator, is_distributed, half=False, return_outputs=False):
+        return evaluator.evaluate(model, save_pr_path, is_distributed, half, return_outputs=return_outputs)

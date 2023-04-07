@@ -234,7 +234,8 @@ class ValTransform:
         data
     """
 
-    def __init__(self, swap=(2, 0, 1), legacy=False):
+    def __init__(self, swap=(2, 0, 1), max_labels=50, legacy=False,):
+        self.max_labels = max_labels
         self.swap = swap
         self.legacy = legacy
 
@@ -246,5 +247,10 @@ class ValTransform:
             img /= 255.0
             img -= np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
             img /= np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
-        return img, np.zeros((1, 5))
-        # return img, res           # 检查数据集
+
+        if res is None:
+            return img, np.zeros((1, 5))
+        padded_labels = np.zeros((self.max_labels, 5))
+        padded_labels[range(len(res))[: self.max_labels]] = res[: self.max_labels]
+        padded_labels = np.ascontiguousarray(padded_labels, dtype=np.float32)
+        return img, padded_labels
