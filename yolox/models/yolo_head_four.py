@@ -9,11 +9,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from yolox.utils import bboxes_iou, meshgrid
+from yolox.utils import bboxes_iou, cxcywh2xyxy, meshgrid, visualize_assign
 from yolox.models.gfocal_loss import FocalLoss
 from .losses import IOUloss
 from .network_blocks import BaseConv, DWConv
-
 
 class YOLOXHeadFour(nn.Module):
     def __init__(
@@ -593,6 +592,97 @@ class YOLOXHeadFour(nn.Module):
             obj_weight_loss
         )
 
+    @torch.no_grad()
+    def _get_assignments(
+        self,
+        batch_idx,
+        num_gt,
+        gt_bboxes_per_image,
+        gt_classes,
+        bboxes_preds_per_image,
+        expanded_strides,
+        x_shifts,
+        y_shifts,
+        cls_preds,
+        obj_preds,
+        mode="gpu",
+    ):
+
+        if mode == "cpu":
+            print("-----------Using CPU for the Current Batch-------------")
+            gt_bboxes_per_image = gt_bboxes_per_image.cpu().float()
+            bboxes_preds_per_image = bboxes_preds_per_image.cpu().float()
+            gt_classes = gt_classes.cpu().float()
+            expanded_strides = expanded_strides.cpu().float()
+            x_shifts = x_shifts.cpu()
+            y_shifts = y_shifts.cpu()
+
+        fg_mask, geometry_relation = self._get_geometry_constraint(
+            gt_bboxes_per_image,
+            expanded_strides,
+            x_shifts,
+            y_shifts,
+        )
+
+        bboxes_preds_per_image = bboxes_preds_per_image[fg_mask]
+        cls_preds_ = cls_preds[batch_idx][fg_mask]
+        obj_preds_ = obj_preds[batch_idx][fg_mask]
+        num_in_boxes_anchor = bboxes_preds_per_image.shape[0]
+
+        if mode == "cpu":
+            gt_bboxes_per_image = gt_bboxes_per_image.cpu()
+            bboxes_preds_per_image = bboxes_preds_per_image.cpu()
+
+        pair_wise_ious = bboxes_iou(gt_bboxes_per_image, bboxes_preds_per_image, False)
+
+        gt_cls_per_image = (
+            F.one_hot(gt_classes.to(torch.int64), self.num_classes)
+            .float()
+        )
+        pair_wise_ious_loss = -torch.log(pair_wise_ious + 1e-8)
+
+        if mode == "cpu":
+            cls_preds_, obj_preds_ = cls_preds_.cpu(), obj_preds_.cpu()
+
+        with torch.cuda.amp.autocast(enabled=False):
+            cls_preds_ = (
+                cls_preds_.float().sigmoid_() * obj_preds_.float().sigmoid_()
+            ).sqrt()
+            pair_wise_cls_loss = F.binary_cross_entropy(
+                cls_preds_.unsqueeze(0).repeat(num_gt, 1, 1),
+                gt_cls_per_image.unsqueeze(1).repeat(1, num_in_boxes_anchor, 1),
+                reduction="none"
+            ).sum(-1)
+        del cls_preds_
+
+        cost = (
+            pair_wise_cls_loss
+            + 3.0 * pair_wise_ious_loss
+            + float(1e6) * (~geometry_relation)
+        )
+
+        (
+            num_fg,
+            gt_matched_classes,
+            pred_ious_this_matching,
+            matched_gt_inds,
+        ) = self.simota_matching(cost, pair_wise_ious, gt_classes, num_gt, fg_mask)
+        del pair_wise_cls_loss, cost, pair_wise_ious, pair_wise_ious_loss
+
+        if mode == "cpu":
+            gt_matched_classes = gt_matched_classes.cuda()
+            fg_mask = fg_mask.cuda()
+            pred_ious_this_matching = pred_ious_this_matching.cuda()
+            matched_gt_inds = matched_gt_inds.cuda()
+
+        return (
+            gt_matched_classes,
+            fg_mask,
+            pred_ious_this_matching,
+            matched_gt_inds,
+            num_fg,
+        )
+    
     def get_geometry_constraint(
         self,
         gt_bboxes_per_image,
@@ -635,6 +725,37 @@ class YOLOXHeadFour(nn.Module):
         obj_weight_loss[anchor_filter==False] = 1
         return anchor_filter, geometry_relation, obj_weight_loss
 
+    def _get_geometry_constraint(
+        self, gt_bboxes_per_image, expanded_strides, x_shifts, y_shifts,
+    ):
+        """
+        Calculate whether the center of an object is located in a fixed range of
+        an anchor. This is used to avert inappropriate matching. It can also reduce
+        the number of candidate anchors so that the GPU memory is saved.
+        """
+        expanded_strides_per_image = expanded_strides[0]
+        x_centers_per_image = ((x_shifts[0] + 0.5) * expanded_strides_per_image).unsqueeze(0)
+        y_centers_per_image = ((y_shifts[0] + 0.5) * expanded_strides_per_image).unsqueeze(0)
+
+        # in fixed center
+        center_radius = 1.5
+        center_dist = expanded_strides_per_image.unsqueeze(0) * center_radius
+        gt_bboxes_per_image_l = (gt_bboxes_per_image[:, 0:1]) - center_dist
+        gt_bboxes_per_image_r = (gt_bboxes_per_image[:, 0:1]) + center_dist
+        gt_bboxes_per_image_t = (gt_bboxes_per_image[:, 1:2]) - center_dist
+        gt_bboxes_per_image_b = (gt_bboxes_per_image[:, 1:2]) + center_dist
+
+        c_l = x_centers_per_image - gt_bboxes_per_image_l
+        c_r = gt_bboxes_per_image_r - x_centers_per_image
+        c_t = y_centers_per_image - gt_bboxes_per_image_t
+        c_b = gt_bboxes_per_image_b - y_centers_per_image
+        center_deltas = torch.stack([c_l, c_t, c_r, c_b], 2)
+        is_in_centers = center_deltas.min(dim=-1).values > 0.0
+        anchor_filter = is_in_centers.sum(dim=0) > 0
+        geometry_relation = is_in_centers[:, anchor_filter]
+
+        return anchor_filter, geometry_relation
+
     def simota_matching(self, cost, pair_wise_ious, gt_classes, num_gt, fg_mask):
         # Dynamic K
         # ---------------------------------------------------------------
@@ -670,3 +791,71 @@ class YOLOXHeadFour(nn.Module):
             fg_mask_inboxes
         ]
         return num_fg, gt_matched_classes, pred_ious_this_matching, matched_gt_inds
+
+    def visualize_assign_result(self, xin, labels=None, imgs=None, save_prefix="assign_vis_"):
+        # original forward logic
+        outputs, x_shifts, y_shifts, expanded_strides = [], [], [], []
+        # TODO: use forward logic here.
+
+        for k, (cls_conv, reg_conv, obj_conv, stride_this_level, x) in enumerate(
+            zip(self.cls_convs, self.reg_convs, self.obj_convs, self.strides, xin)
+        ):
+            cls_x = x
+            reg_x = x
+            obj_x = x
+
+            cls_feat = cls_conv(cls_x)
+            cls_output = self.cls_preds[k](cls_feat)
+
+            reg_feat = reg_conv(reg_x)
+            reg_output = self.reg_preds[k](reg_feat)
+
+            obj_feat = obj_conv(obj_x)
+            obj_output = self.obj_preds[k](obj_feat)
+
+            output = torch.cat([reg_output, obj_output, cls_output], 1)
+            output, grid = self.get_output_and_grid(output, k, stride_this_level, xin[0].type())
+            x_shifts.append(grid[:, :, 0])
+            y_shifts.append(grid[:, :, 1])
+            expanded_strides.append(
+                torch.full((1, grid.shape[1]), stride_this_level).type_as(xin[0])
+            )
+            outputs.append(output)
+
+        outputs = torch.cat(outputs, 1)
+        bbox_preds = outputs[:, :, :4]  # [batch, n_anchors_all, 4]
+        obj_preds = outputs[:, :, 4:5]  # [batch, n_anchors_all, 1]
+        cls_preds = outputs[:, :, 5:]  # [batch, n_anchors_all, n_cls]
+
+        # calculate targets
+        total_num_anchors = outputs.shape[1]
+        x_shifts = torch.cat(x_shifts, 1)  # [1, n_anchors_all]
+        y_shifts = torch.cat(y_shifts, 1)  # [1, n_anchors_all]
+        expanded_strides = torch.cat(expanded_strides, 1)
+
+        nlabel = (labels.sum(dim=2) > 0).sum(dim=1)  # number of objects
+        for batch_idx, (img, num_gt, label) in enumerate(zip(imgs, nlabel, labels)):
+            img = imgs[batch_idx].permute(1, 2, 0).to(torch.uint8)
+            num_gt = int(num_gt)
+            if num_gt == 0:
+                fg_mask = outputs.new_zeros(total_num_anchors).bool()
+            else:
+                gt_bboxes_per_image = label[:num_gt, 1:5]
+                gt_classes = label[:num_gt, 0]
+                bboxes_preds_per_image = bbox_preds[batch_idx]
+                _, fg_mask, _, matched_gt_inds, _ = self._get_assignments(  # noqa
+                    batch_idx, num_gt, gt_bboxes_per_image, gt_classes,
+                    bboxes_preds_per_image, expanded_strides, x_shifts,
+                    y_shifts, cls_preds, obj_preds,
+                )
+
+            img = img.cpu().numpy().copy()  # copy is crucial here
+            coords = torch.stack([
+                ((x_shifts + 0.5) * expanded_strides).flatten()[fg_mask],
+                ((y_shifts + 0.5) * expanded_strides).flatten()[fg_mask],
+            ], 1)
+
+            xyxy_boxes = cxcywh2xyxy(gt_bboxes_per_image)
+            save_name = save_prefix + str(batch_idx) + ".png"
+            img = visualize_assign(img, xyxy_boxes, coords, matched_gt_inds, save_name)
+            logger.info(f"save img to {save_name}")

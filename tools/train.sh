@@ -19,7 +19,7 @@ CUDA_VISIBLE_DEVICES=2,3 python3 tools/train.py \
     -d 2 \
     -b 64 \
     -f /code/YOLOX/exps/example/custom/yolox_mobilenetv2-050_033-ghostfpn-Two-C.py \
-    -c /code/YOLOX/YOLOX_outputs/YOLOX-BSD-ghostfpn-Two_classes/yolox-mobilenetv2-050_033_2023-04-01_133848/best_ckpt.pth \
+    -c /code/YOLOX/YOLOX_outputs/YOLOX-BSD-ghostfpn-Two_classes/yolox-mobilenetv2-050_033_2023-04-07_160721/best_ckpt.pth \
     -o \
     --logger wandb \
         wandb-project YOLOX-BSD-Two \

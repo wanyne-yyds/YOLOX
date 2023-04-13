@@ -142,9 +142,14 @@ static int detect_yolox(const cv::Mat& bgr, std::vector<Object>& objects)
     int img_w = bgr.cols;
     int img_h = bgr.rows;
 
-    int w = YOLOX_TARGET_W_SIZE;
-    int h = YOLOX_TARGET_H_SIZE;
-    
+    float w = YOLOX_TARGET_W_SIZE;
+    float h = YOLOX_TARGET_H_SIZE;
+
+    double ratio_w = w / img_w;
+    double ratio_h = h / img_h;
+    std::cout << w << std::endl;
+    std::cout << img_w << std::endl;
+    std::cout << ratio_w << std::endl;
     unsigned char* model = (unsigned char*)(yolox_bin);
 	unsigned char* param = (unsigned char*)(yolox_param_bin);
 	std::vector<int> inpNodes = std::vector<int>{yolox_param_id::BLOB_data};
@@ -159,6 +164,9 @@ static int detect_yolox(const cv::Mat& bgr, std::vector<Object>& objects)
         yolox_param_id::BLOB_bbox32,
         yolox_param_id::BLOB_obj32,
         yolox_param_id::BLOB_cls32,
+        yolox_param_id::BLOB_bbox64,
+        yolox_param_id::BLOB_obj64,
+        yolox_param_id::BLOB_cls64,
     };
     std::vector<std::vector<float>>	anchors;
 
@@ -173,7 +181,7 @@ static int detect_yolox(const cv::Mat& bgr, std::vector<Object>& objects)
 	ex.set_num_threads(nThread);
 
     ex.input(inpNodes[0], in);
-    std::vector<float> strides = std::vector<float>{ 8.f, 16.f, 32.f };
+    std::vector<float> strides = std::vector<float>{ 8.f, 16.f, 32.f, 64.f};
     std::vector<Object> proposals;
     // std::vector<GridAndStride> grid_strides;
     // generate_grids_and_stride(YOLOX_TARGET_SIZE, strides, grid_strides);
@@ -188,7 +196,7 @@ static int detect_yolox(const cv::Mat& bgr, std::vector<Object>& objects)
         const int stride = strides[anchor_idx];
         int num_grid_x = reg_blob.w;
         int num_grid_y = reg_blob.h;
-        int nClasses = 11;
+        int nClasses = 4;
         for (int i = 0; i < num_grid_y; i++)
         {
             for (int j = 0; j < num_grid_x; j++)
@@ -245,7 +253,10 @@ static int detect_yolox(const cv::Mat& bgr, std::vector<Object>& objects)
         y0 = std::max(std::min(y0, (float)(img_h - 1)), 0.f);
         x1 = std::max(std::min(x1, (float)(img_w - 1)), 0.f);
         y1 = std::max(std::min(y1, (float)(img_h - 1)), 0.f);
-
+        x0 = x0 / ratio_w;
+        y0 = y0 / ratio_h;
+        x1 = x1 / ratio_w;
+        y1 = y1 / ratio_h;
         objects[i].rect.x = x0;
         objects[i].rect.y = y0;
         objects[i].rect.width = x1 - x0;
@@ -259,7 +270,9 @@ static void draw_objects(const cv::Mat& bgr, const std::vector<Object>& objects)
 {
     static const char* class_names[] = {
         "person",
-        "other"
+        "personD",
+        "other",
+        "ignore"
     };
 
     cv::Mat image = bgr.clone();
@@ -316,7 +329,7 @@ int main(int argc, char** argv)
 
     std::vector<Object> objects;
     detect_yolox(m, objects);
-    // draw_objects(m, objects);
+    draw_objects(m, objects);
 
     return 0;
 }

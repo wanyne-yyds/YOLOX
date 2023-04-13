@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.4.1)
 option(USE_T7		"USE T7"            OFF)
 option(USE_MNN      "USE MNN"           OFF)
 option(USE_NCNN     "USE NCNN"          OFF)
-option(USE_LINUX	"USE LINUX"         OFF)
-option(USE_ROCKCHIP "USE ROCKCHIP"      ON)
+option(USE_LINUX	"USE LINUX"         ON)
+option(USE_ROCKCHIP "USE ROCKCHIP"      OFF)
 
 message("==========================================================")
 message("-- option:")
@@ -95,13 +95,13 @@ elseif (CMAKE_HOST_UNIX)
     elseif(USE_LINUX)
         set(CMAKE_CXX_FLAGS "-std=c++11 -lpthread -fopenmp")
         # OPENCV
-        set(OPENCV_DIR "~/Code/tools/opencv-2.4.13.6/build-linux/install")
+        set(OPENCV_DIR "~/library/opencv-3.4.16/build_linux/install")
         # MNN
-        set(MNN_DIR "~/Code/tools/mnn")
+        set(MNN_DIR "~/library/MNN")
         include_directories(${MNN_DIR}/include)
-        link_directories(${MNN_DIR}/build/linux/)
+        link_directories(${MNN_DIR}/build_static/)
         # NCNN
-        set(NCNN_DIR "~/Code/tools/ncnn/build-linux/install")
+        set(NCNN_DIR "~/library/ncnn/build/linux/install")
     endif()
 
     include_directories(${OPENCV_DIR}/include)
