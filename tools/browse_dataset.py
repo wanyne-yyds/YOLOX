@@ -47,7 +47,6 @@ if __name__ == "__main__":
         if len(target.shape) == 1:
             target = target.numpy()[np.newaxis, :]
         
-        Classes = False
         for i in range(len(target)):
             if args.phase == "train":
                 box = target[i][1:]
@@ -66,8 +65,7 @@ if __name__ == "__main__":
                 
             if np.sum([x0,x1,y0,y1]) == 0:
                 continue
-            if cls == 1:
-                Classes = True
+
             cv2.rectangle(images, (x0, y0), (x1, y1), (0,0,255), 1)
 
             font = cv2.FONT_HERSHEY_SIMPLEX
@@ -84,5 +82,4 @@ if __name__ == "__main__":
             txt_color = (0, 0, 0)
             cv2.putText(images, text, (x0, y0 + txt_size[1]), font, 0.4, txt_color, thickness=1)
         time.sleep(2)
-        if Classes:
-            cv2.imwrite(imgname, images)
+        cv2.imwrite(imgname, images)

@@ -164,6 +164,8 @@ class YOLOXHeadFour(nn.Module):
         y_shifts = []
         expanded_strides = []
 
+        self.use_l1 = False
+        
         for k, (cls_conv, reg_conv, obj_conv, stride_this_level, x) in enumerate(
             zip(self.cls_convs, self.reg_convs, self.obj_convs, self.strides, xin)
         ):

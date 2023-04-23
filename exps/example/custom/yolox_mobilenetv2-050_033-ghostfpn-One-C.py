@@ -6,6 +6,8 @@ import os
 import time
 import torch.nn as nn
 from yolox.exp import Exp as MyExp
+
+
 class Exp(MyExp):
     def __init__(self):
         super(Exp, self).__init__()
@@ -14,7 +16,7 @@ class Exp(MyExp):
         self.depth = 0.33
         self.width = 0.50
         self.act = 'LeakyReLU'              #* 激活函数
-        self.num_classes = 4                #* 类别数
+        self.num_classes = 3                #* 类别数
         self.backbone_net = "MobileNetV2"   #? 网络选择(MobileNetV2, CSPDarknet)
         self.out_indices = [6, 12, 16]
         self.mobilenet_invertedt = [
@@ -33,17 +35,17 @@ class Exp(MyExp):
         self.Head_in_channels = [32, 32, 32, 32] # ghostfpn 输出: in_c * width
         self.Head_out_channels = 32
         self.reg_iou_type = 'iou'
-        self.cls_weight = [1, 0.2, 1, 0]
-        self.ignore_label = 3.0
+        self.cls_weight = [1, 0.2, 0]
+        self.ignore_label = 2.0
 
         # ---------------- dataloader config ---------------- #
         self.data_num_workers = 10          #* 工人数量
         self.input_size = (320, 576)        #* 输入尺寸(高, 宽)
         self.multiscale_range = 0           #* 0 关闭多尺度
-        self.data_dir = "/code/data/YOLOX-CocoFormat-BSD_Two_Classes-New-WeightLoss-2023-04-21_14:44:40"
+        self.data_dir = "/code/data/YOLOX-CocoFormat-BSD_One_Classes-New-WeightLoss-2023-04-21_15:24:16"
         self.train_ann = "instances_train2017.json"
         self.val_ann = "instances_val2017.json"
-        self.output_dir = "./YOLOX_outputs/YOLOX-BSD-ghostfpn-Two_classes"
+        self.output_dir = "./YOLOX_outputs/YOLOX-BSD-ghostfpn-One_classes"
 
         # --------------- transform config ----------------- #
         self.mosaic_prob = -1               #* mosaic 概率

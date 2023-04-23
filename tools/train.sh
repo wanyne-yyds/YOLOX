@@ -19,11 +19,10 @@ CUDA_VISIBLE_DEVICES=2,3 python3 tools/train.py \
     -d 2 \
     -b 64 \
     -f /code/YOLOX/exps/example/custom/yolox_mobilenetv2-050_033-ghostfpn-Two-C.py \
-    -c /code/YOLOX/YOLOX_outputs/YOLOX-BSD-ghostfpn-Two_classes/yolox-mobilenetv2-050_033_2023-04-07_160721/best_ckpt.pth \
     -o \
     --logger wandb \
         wandb-project YOLOX-BSD-Two \
-        wandb-name YOLOX-MobilenetV2-050_033-ckndatset-New-AdamW-WeightLoss-320x576-$current_time \
+        wandb-name YOLOX-MobilenetV2-050_033-ckndatset-New-AdamW-WeightLoss-Two-320x576x0008-$current_time \
         wandb-save_dir YOLOX_outputs/YOLOX-BSD-ghostfpn-Two_classes \
 
     # --resume

@@ -36,7 +36,11 @@ def make_parser():
         action="store_true",
         help="whether to save the inference result of image/video",
     )
-
+    parser.add_argument(
+        "--save_pr_content",
+        action="store_true",
+        help="whether to save the result of Pr content",
+    )
     # exp file
     parser.add_argument(
         "-f",
@@ -169,7 +173,7 @@ class Predictor(object):
         ratio = img_info["ratio"]
         img = img_info["raw_img"]
         if output is None:
-            return img
+            return img, []
         output = output.cpu()
 
         bboxes = output[:, 0:4]
@@ -181,10 +185,11 @@ class Predictor(object):
         scores = output[:, 4] * output[:, 5]
 
         vis_res = vis(img, bboxes, scores, cls, cls_conf, self.cls_names)
-        return vis_res
+        per_res = [cls, scores, bboxes]
+        return vis_res, per_res
 
 
-def image_demo(predictor, vis_folder, path, current_time, save_result):
+def image_demo(predictor, vis_folder, path, current_time, save_result, save_pr_content):
     if os.path.isdir(path):
         files = get_image_list(path)
     else:
@@ -192,8 +197,8 @@ def image_demo(predictor, vis_folder, path, current_time, save_result):
     files.sort()
     for image_name in files:
         outputs, img_info = predictor.inference(image_name)
-        result_image = predictor.visual(outputs[0], img_info, predictor.confthre)
-        if save_result:
+        result_image, per_res = predictor.visual(outputs[0], img_info, predictor.confthre)
+        if save_result and not save_pr_content:
             save_folder = os.path.join(
                 vis_folder, time.strftime("%Y_%m_%d_%H_%M_%S", current_time)
             )
@@ -201,6 +206,32 @@ def image_demo(predictor, vis_folder, path, current_time, save_result):
             save_file_name = os.path.join(save_folder, os.path.basename(image_name))
             logger.info("Saving detection result in {}".format(save_file_name))
             cv2.imwrite(save_file_name, result_image)
+        if save_pr_content:
+            save_txtfile_name = str(image_name).replace(path, vis_folder).replace(".jpg", ".txt")
+            savepath, _ = os.path.split(save_txtfile_name)
+            if not os.path.exists(savepath):
+                os.makedirs(savepath, exist_ok=True)
+            f = open(save_txtfile_name, "w")
+            if len(per_res) == 0:
+                f.close()
+                continue
+            cls, scores, bboxes = per_res
+            for i in range(len(bboxes)):
+                bbox = bboxes[i]
+                cls_id = int(cls[i])
+                score = scores[i]
+                if score < predictor.confthre:
+                    continue
+                x0 = int(bbox[0])
+                y0 = int(bbox[1])
+                x1 = int(bbox[2])
+                y1 = int(bbox[3])
+                class_name = COCO_CLASSES[cls_id]
+                if class_name == "personD":
+                    class_name = "person"
+                content = "%s %.2f %d %d %d %d\n"%(class_name, score, x0, y0, x1, y1)
+                f.write(content)
+            f.close()
         ch = cv2.waitKey(0)
         if ch == 27 or ch == ord("q") or ch == ord("Q"):
             break
@@ -228,7 +259,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
         ret_val, frame = cap.read()
         if ret_val:
             outputs, img_info = predictor.inference(frame)
-            result_frame = predictor.visual(outputs[0], img_info, predictor.confthre)
+            result_frame, _ = predictor.visual(outputs[0], img_info, predictor.confthre)
             if args.save_result:
                 vid_writer.write(result_frame)
             else:
@@ -239,7 +270,6 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 break
         else:
             break
-
 
 def main(exp, args):
     if not args.experiment_name:
@@ -308,10 +338,9 @@ def main(exp, args):
     )
     current_time = time.localtime()
     if args.demo == "image":
-        image_demo(predictor, vis_folder, args.path, current_time, args.save_result)
+        image_demo(predictor, vis_folder, args.path, current_time, args.save_result, args.save_pr_content)
     elif args.demo == "video" or args.demo == "webcam":
         imageflow_demo(predictor, vis_folder, current_time, args)
-
 
 if __name__ == "__main__":
     args = make_parser().parse_args()

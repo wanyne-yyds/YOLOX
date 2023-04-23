@@ -97,6 +97,8 @@ class COCODataset(CacheDataset):
         annotations = self.coco.loadAnns(anno_ids)
         objs = []
         for obj in annotations:
+            if obj["category_id"] == 0:
+                continue
             x1 = np.max((0, obj["bbox"][0]))
             y1 = np.max((0, obj["bbox"][1]))
             x2 = np.min((width, x1 + np.max((0, obj["bbox"][2]))))

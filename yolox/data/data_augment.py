@@ -159,10 +159,11 @@ def preproc(img, input_size, swap=(2, 0, 1)):
 
 
 class TrainTransform:
-    def __init__(self, max_labels=50, flip_prob=0.5, hsv_prob=1.0):
+    def __init__(self, max_labels=50, flip_prob=0.5, hsv_prob=1.0, ignore_label=3.0):
         self.max_labels = max_labels
         self.flip_prob = flip_prob
         self.hsv_prob = hsv_prob
+        self.ignore_label = ignore_label
 
     def __call__(self, image, targets, input_dim):
         boxes = targets[:, :4].copy()
@@ -192,9 +193,16 @@ class TrainTransform:
         boxes[:, 2] *= r_[1]
         boxes[:, 3] *= r_[0]
 
-        mask_b = np.minimum(boxes[:, 2], boxes[:, 3]) > 1
+        # mask_b = np.minimum(boxes[:, 2], boxes[:, 3]) > 1
+        
+        # 过滤掉面积小于千分之二的框
+        mask_b = boxes[:, 2] * boxes[:, 3] > int((input_dim[0] * input_dim[1]) * 0.002)
         boxes_t = boxes[mask_b]
         labels_t = labels[mask_b]
+
+        # 将面积小于千分之四的框标签更改为: ignore
+        mask_b = boxes_t[:, 2] * boxes_t[:, 3] < int((input_dim[0] * input_dim[1]) * 0.004)
+        labels_t[mask_b] = self.ignore_label
 
         if len(boxes_t) == 0:
             image_t, r_o = preproc(image_o, input_dim)
