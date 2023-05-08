@@ -45,7 +45,6 @@ class Exp(BaseExp):
         self.val_ann = "instances_val2017.json"
         # name of annotation file for testing
         self.test_ann = "instances_test2017.json"
-        self.ignore_label = 3.0
 
         # --------------- transform config ----------------- #
         # prob of applying mosaic aug
@@ -83,6 +82,8 @@ class Exp(BaseExp):
         self.no_aug_epochs = 15
         # apply EMA during training
         self.ema = True
+        # lr milestones
+        self.milestones = [20, 50, 150]
 
         # weight decay of optimizer
         self.weight_decay = 5e-4
@@ -149,7 +150,6 @@ class Exp(BaseExp):
                 max_labels=50,
                 flip_prob=self.flip_prob,
                 hsv_prob=self.hsv_prob,
-                ignore_label=self.ignore_label,
             ),
             cache=cache,
             cache_type=cache_type,
@@ -191,7 +191,7 @@ class Exp(BaseExp):
                 max_labels=120,
                 flip_prob=self.flip_prob,
                 hsv_prob=self.hsv_prob,
-                ignore_label=self.ignore_label),
+                ),
             degrees=self.degrees,
             translate=self.translate,
             mosaic_scale=self.mosaic_scale,
@@ -301,6 +301,7 @@ class Exp(BaseExp):
             warmup_lr_start=self.warmup_lr,
             no_aug_epochs=self.no_aug_epochs,
             min_lr_ratio=self.min_lr_ratio,
+            milestones = self.milestones
         )
         return scheduler
 

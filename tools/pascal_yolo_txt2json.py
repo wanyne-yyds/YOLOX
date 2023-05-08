@@ -35,9 +35,13 @@ def convert(jpg_list, json_file, txt_file):
     categories = pre_define_categories.copy()
     bnd_id = START_BOUNDING_BOX_ID
     all_categories = {}
+    new_categories = {v-1:k for k,v in categories.items()}
     for index, line in enumerate(jpg_list):
         jpg_f = line
-        filename = os.path.basename(jpg_f)
+        if txt_file == "Train":
+            filename = jpg_f.replace(train_txt_dir, '')
+        else:
+            filename = jpg_f.replace(test_txt_dir, '')
         img = cv2.imread(jpg_f)
         height, width, _ = img.shape
         txt_f = jpg_f[:-3] + 'txt'
@@ -48,10 +52,9 @@ def convert(jpg_list, json_file, txt_file):
             f = open(txt_f, 'r', encoding='unicode_escape')
             content = f.readlines()
             for bbox in content:
-                category, x, y, w, h = bbox.split(' ')
-                category, x, y, w, h = int(category), float(x) * width, float(y) * height, float(w) * width, float(h) * height
-                if category == 0:
-                    category = 'person'
+                category_num, x, y, w, h = bbox.split(' ')
+                category_num, x, y, w, h = int(category_num), float(x) * width, float(y) * height, float(w) * width, float(h) * height
+                category = new_categories[category_num]    
                 if category in all_categories:
                     all_categories[category] += 1
                 else:
@@ -76,6 +79,7 @@ def convert(jpg_list, json_file, txt_file):
                 assert(ymax > ymin), "ymax <= ymin, {}".format(line)
                 o_width = abs(xmax - xmin)
                 o_height = abs(ymax - ymin)
+                assert(o_width*o_height > 100), "width*height <= 0, {}".format(line)
                 ann = {'area': o_width*o_height, 'iscrowd': 0, 'image_id':
                         image_id, 'bbox':[xmin, ymin, o_width, o_height],
                         'category_id': category_id, 'id': bnd_id, 'ignore': 0,
@@ -124,7 +128,6 @@ if __name__ == '__main__':
         shutil.rmtree(path2 +"/val2017")
     os.makedirs(path2 + "/val2017", exist_ok=True)
     
-
     save_json_train = path2 + 'annotations/instances_train2017.json'
     save_json_val = path2 + 'annotations/instances_val2017.json'
 
@@ -143,14 +146,20 @@ if __name__ == '__main__':
 
     f1 = open(path2 + "train.txt", "w")
     for jpg in train_jpg_list:
-        f1.write(os.path.basename(jpg)[:-4] + "\n")
-        train_image_pathname = path2 + "/train2017/" + os.path.basename(jpg)
+        name = jpg.replace(train_txt_dir, "")
+        f1.write(name[:-4] + "\n")
+        train_image_pathname = path2 + "train2017/" + name
+        if os.path.exists(os.path.dirname(train_image_pathname)) == False:
+            os.makedirs(os.path.dirname(train_image_pathname))
         shutil.copyfile(jpg, train_image_pathname)
 
     f2 = open(path2 + "test.txt", "w")
     for jpg in test_jpg_list:
-        f2.write(os.path.basename(jpg)[:-4] + "\n")
-        val_image_pathname = path2 + "/val2017/" + os.path.basename(jpg)
+        name = jpg.replace(test_txt_dir, "")
+        f2.write(name[:-4] + "\n")
+        val_image_pathname = path2 + "/val2017/" + name
+        if os.path.exists(os.path.dirname(val_image_pathname)) == False:
+            os.makedirs(os.path.dirname(val_image_pathname))
         shutil.copyfile(jpg, val_image_pathname)
 
     f1.close()
@@ -158,3 +167,5 @@ if __name__ == '__main__':
     print("-------------------------------")
     print("train number:", len(train_jpg_list))
     print("val number:", len(test_jpg_list))
+
+

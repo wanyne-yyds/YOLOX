@@ -45,7 +45,6 @@ class YOLOXHeadFour_Seg(nn.Module):
         self.cls_convs = nn.ModuleList()
         self.reg_convs = nn.ModuleList()
         self.obj_convs = nn.ModuleList()
-        self.seg_convs = nn.ModuleList()
 
         self.cls_preds = nn.ModuleList()
         self.reg_preds = nn.ModuleList()
@@ -188,8 +187,8 @@ class YOLOXHeadFour_Seg(nn.Module):
         expanded_strides = []
 
         self.use_l1 = False
-        reg_output = self.seg_preds[0](xin[0])
-        outputs.append(reg_output)
+        seg_output = self.seg_preds[0](xin[0])
+        outputs.append(seg_output)
 
         for k, (cls_conv, reg_conv, obj_conv, stride_this_level, x) in enumerate(
             zip(self.cls_convs, self.reg_convs, self.obj_convs, self.strides, xin)
@@ -260,7 +259,13 @@ class YOLOXHeadFour_Seg(nn.Module):
                 ).permute(0, 2, 1)
                 outputs = [outputs[0], outputs_d]
             if self.decode_in_inference:
-                return self.decode_outputs(outputs, dtype=xin[0].type())
+                if len(outputs) == 2:
+                    outputs_d = outputs[1]
+                    outputs_s = outputs[0]
+                    outputs_d = self.decode_outputs(outputs_d, dtype=xin[0].type())
+                    return [outputs_s, outputs_d]
+                else:
+                    return self.decode_outputs(outputs, dtype=xin[0].type())
             else:
                 return outputs
 

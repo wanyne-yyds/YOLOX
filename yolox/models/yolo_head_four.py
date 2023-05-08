@@ -26,7 +26,6 @@ class YOLOXHeadFour(nn.Module):
         iou_type='iou',
         depthwise=False,
         conv_models_deploy=False,
-        cls_weight=[1, 1]
     ):
         """
         Args:
@@ -38,7 +37,6 @@ class YOLOXHeadFour(nn.Module):
         self.num_classes = num_classes
         self.decode_in_inference = True  # for deploy, set to False
         self.conv_models_deploy = conv_models_deploy
-        self.cls_weight = cls_weight
 
         self.cls_convs = nn.ModuleList()
         self.reg_convs = nn.ModuleList()
@@ -73,14 +71,14 @@ class YOLOXHeadFour(nn.Module):
             self.obj_convs.append(
                 nn.Sequential(
                     *[
-                        Conv(                            
+                        BaseConv(                            
                             in_channels=int(in_channels[i] * width),
                             out_channels=int(out_c * width),
                             ksize=3,
                             stride=1,
                             act=act,
                         ),
-                        Conv(                            
+                        BaseConv(                            
                             in_channels=int(out_c * width),
                             out_channels=int(out_c * width),
                             ksize=3,
@@ -142,7 +140,7 @@ class YOLOXHeadFour(nn.Module):
         self.l1_loss = nn.L1Loss(reduction="none")
         self.iou_loss = IOUloss(reduction="none", loss_type=iou_type)
         self.bcewithlog_loss = nn.BCEWithLogitsLoss(reduction="none")
-        self.focalloss = FocalLoss(gamma=2, alpha=0.25, reduction="none", loss_weight=1)
+        # self.focalloss = FocalLoss(gamma=2, alpha=0.25, reduction="none", loss_weight=1)
         self.strides = strides
         self.grids = [torch.zeros(1)] * len(in_channels)
 
@@ -293,8 +291,6 @@ class YOLOXHeadFour(nn.Module):
         obj_preds = outputs[:, :, 4:5]  # [batch, n_anchors_all, 1]
         cls_preds = outputs[:, :, 5:]  # [batch, n_anchors_all, n_cls]
 
-        device = cls_preds.device
-
         # calculate targets
         nlabel = (labels.sum(dim=2) > 0).sum(dim=1)  # number of objects
 
@@ -306,15 +302,10 @@ class YOLOXHeadFour(nn.Module):
             origin_preds = torch.cat(origin_preds, 1)
 
         cls_targets = []
-        cls_weights = []
         reg_targets = []
         l1_targets = []
         obj_targets = []
         fg_masks = []
-
-        weight_loss_objs = []
-        weight_loss_regs = []
-        weight_nums = torch.Tensor(self.cls_weight).cuda()
         
         num_fg = 0.0
         num_gts = 0.0
@@ -324,14 +315,10 @@ class YOLOXHeadFour(nn.Module):
             num_gts += num_gt
             if num_gt == 0:
                 cls_target = outputs.new_zeros((0, self.num_classes))
-                c_weight = outputs.new_zeros((0))
                 reg_target = outputs.new_zeros((0, 4))
                 l1_target = outputs.new_zeros((0, 4))
                 obj_target = outputs.new_zeros((total_num_anchors, 1))
                 fg_mask = outputs.new_zeros(total_num_anchors).bool()
-
-                reg_weights_loss = outputs.new_ones((0))
-                obj_weights_loss = outputs.new_ones((total_num_anchors, 1))
             else:
                 gt_bboxes_per_image = labels[batch_idx, :num_gt, 1:5]
                 gt_classes = labels[batch_idx, :num_gt, 0]
@@ -344,11 +331,9 @@ class YOLOXHeadFour(nn.Module):
                         pred_ious_this_matching,
                         matched_gt_inds,
                         num_fg_img,
-                        weight_loss_obj
                     ) = self.get_assignments(  # noqa
                         batch_idx,
                         num_gt,
-                        total_num_anchors,
                         gt_bboxes_per_image,
                         gt_classes,
                         bboxes_preds_per_image,
@@ -356,12 +341,7 @@ class YOLOXHeadFour(nn.Module):
                         x_shifts,
                         y_shifts,
                         cls_preds,
-                        bbox_preds,
                         obj_preds,
-                        labels,
-                        imgs,
-                        weight_nums,
-                        dtype
                     )
                 except RuntimeError as e:
                     # TODO: the string might change, consider a better way
@@ -380,11 +360,9 @@ class YOLOXHeadFour(nn.Module):
                         pred_ious_this_matching,
                         matched_gt_inds,
                         num_fg_img,
-                        weight_loss_obj
                     ) = self.get_assignments(  # noqa
                         batch_idx,
                         num_gt,
-                        total_num_anchors,
                         gt_bboxes_per_image,
                         gt_classes,
                         bboxes_preds_per_image,
@@ -392,11 +370,7 @@ class YOLOXHeadFour(nn.Module):
                         x_shifts,
                         y_shifts,
                         cls_preds,
-                        bbox_preds,
                         obj_preds,
-                        labels,
-                        imgs,
-                        weight_nums,
                         "cpu",
                     )
 
@@ -406,13 +380,7 @@ class YOLOXHeadFour(nn.Module):
                 cls_target = F.one_hot(
                     gt_matched_classes.to(torch.int64), self.num_classes
                 ) * pred_ious_this_matching.unsqueeze(-1)
-
-                c_weight = torch.zeros(gt_matched_classes.shape).to(device)  # 权重矩阵
-                for i in range(gt_matched_classes.shape[0]):
-                    c_weight[i] = self.cls_weight[int(gt_matched_classes[i])]
-
                 obj_target = fg_mask.unsqueeze(-1)
-                obj_weights_loss = weight_loss_obj.unsqueeze(-1)
                 reg_target = gt_bboxes_per_image[matched_gt_inds]
                 if self.use_l1:
                     l1_target = self.get_l1_target(
@@ -422,45 +390,30 @@ class YOLOXHeadFour(nn.Module):
                         x_shifts=x_shifts[0][fg_mask],
                         y_shifts=y_shifts[0][fg_mask],
                     )
-                reg_weights_loss = torch.take(weight_nums, gt_matched_classes.to(torch.int64))
 
             cls_targets.append(cls_target)
-            cls_weights.append(c_weight)
             reg_targets.append(reg_target)
-            weight_loss_regs.append(reg_weights_loss)
             obj_targets.append(obj_target.to(dtype))
-            weight_loss_objs.append(obj_weights_loss.to(dtype))
             fg_masks.append(fg_mask)
             if self.use_l1:
                 l1_targets.append(l1_target)
 
         cls_targets = torch.cat(cls_targets, 0)
-        cls_weights = torch.cat(cls_weights, 0).unsqueeze(1)
         reg_targets = torch.cat(reg_targets, 0)
-        weight_loss_regs = torch.cat(weight_loss_regs, 0)
         obj_targets = torch.cat(obj_targets, 0)
-        weight_loss_objs = torch.cat(weight_loss_objs, 0)
         fg_masks = torch.cat(fg_masks, 0)
-
         if self.use_l1:
             l1_targets = torch.cat(l1_targets, 0)
-
-        self.bcewithlog_loss_cls = nn.BCEWithLogitsLoss(reduction="none", weight=cls_weights)
         
-        weight_loss_regs = weight_loss_regs.squeeze()
         num_fg = max(num_fg, 1)
         loss_iou = (
-            self.iou_loss(
-                bbox_preds.view(-1, 4)[fg_masks], reg_targets
-            ) * weight_loss_regs
+            self.iou_loss(bbox_preds.view(-1, 4)[fg_masks], reg_targets)
         ).sum() / num_fg
         loss_obj = (
-            self.bcewithlog_loss(
-                obj_preds.view(-1, 1), obj_targets
-            ) * weight_loss_objs
+            self.bcewithlog_loss(obj_preds.view(-1, 1), obj_targets)
         ).sum() / num_fg
         loss_cls = (
-            self.bcewithlog_loss_cls(
+            self.bcewithlog_loss(
                 cls_preds.view(-1, self.num_classes)[fg_masks], cls_targets
             )
         ).sum() / num_fg
@@ -473,7 +426,6 @@ class YOLOXHeadFour(nn.Module):
             loss_l1 = 0.0
 
         reg_weight = 5
-        cls_weight = 1
         loss = reg_weight * loss_iou + loss_obj + loss_cls + loss_l1
 
         return (
@@ -497,7 +449,6 @@ class YOLOXHeadFour(nn.Module):
         self,
         batch_idx,
         num_gt,
-        total_num_anchors,
         gt_bboxes_per_image,
         gt_classes,
         bboxes_preds_per_image,
@@ -505,12 +456,7 @@ class YOLOXHeadFour(nn.Module):
         x_shifts,
         y_shifts,
         cls_preds,
-        bbox_preds,
         obj_preds,
-        labels,
-        imgs,
-        weight_nums,
-        dtype,
         mode="gpu",
     ):
 
@@ -523,15 +469,11 @@ class YOLOXHeadFour(nn.Module):
             x_shifts = x_shifts.cpu()
             y_shifts = y_shifts.cpu()
 
-        l_index = gt_classes.cpu().long()
-        labels_weight_nums = weight_nums[l_index].to(dtype)
-        fg_mask, geometry_relation, obj_weight_loss = self.get_geometry_constraint(
+        fg_mask, geometry_relation = self.get_geometry_constraint(
             gt_bboxes_per_image,
             expanded_strides,
             x_shifts,
             y_shifts,
-            total_num_anchors,
-            labels_weight_nums,
         )
 
         bboxes_preds_per_image = bboxes_preds_per_image[fg_mask]
@@ -591,7 +533,6 @@ class YOLOXHeadFour(nn.Module):
             pred_ious_this_matching,
             matched_gt_inds,
             num_fg,
-            obj_weight_loss
         )
 
     @torch.no_grad()
@@ -691,8 +632,6 @@ class YOLOXHeadFour(nn.Module):
         expanded_strides,
         x_shifts,
         y_shifts,
-        total_num_anchors,
-        labels_weight_nums,
     ):
         """
         Calculate whether the center of an object is located in a fixed range of
@@ -720,12 +659,7 @@ class YOLOXHeadFour(nn.Module):
         anchor_filter = is_in_centers.sum(dim=0) > 0
         geometry_relation = is_in_centers[:, anchor_filter]
 
-        # Obj Weight Loss
-        is_in_boxes_all_classes = labels_weight_nums.unsqueeze(1).repeat(1, total_num_anchors)
-        is_in_boxes_all_classes[is_in_centers[:]==False] = 0
-        obj_weight_loss = is_in_boxes_all_classes.sum(dim=0)
-        obj_weight_loss[anchor_filter==False] = 1
-        return anchor_filter, geometry_relation, obj_weight_loss
+        return anchor_filter, geometry_relation
 
     def _get_geometry_constraint(
         self, gt_bboxes_per_image, expanded_strides, x_shifts, y_shifts,

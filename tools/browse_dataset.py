@@ -31,14 +31,22 @@ if __name__ == "__main__":
     exp = get_exp(args.exp_file)
     
     swap = (1, 2, 0)
-    classes_name = ["person", "personD", "other", "ignore"]
-    # classes_name = ["person"]
+    # classes_name = ["person", "personD", "other", "ignore"]
+    classes_name = ["person"]
     if args.phase == 'train':
+        print("train")
         loader = exp.get_data_loader(batch_size=1, is_distributed=False)
     elif args.phase == 'val':
+        print("val")
         loader = exp.get_eval_loader(batch_size=1, is_distributed=False)
 
     for img, target, img_info, img_id in loader:
+
+        # if int(img_info[0].numpy()[0]) != 720:
+        #     continue
+        # print("img_info height: ",img_info[0].numpy()[0])
+        # print("img_info width: ", img_info[1].numpy()[0])
+
         image = torch.squeeze(img)
         image = image.numpy().astype(np.uint8).copy()
         target = torch.squeeze(target)
@@ -81,5 +89,7 @@ if __name__ == "__main__":
             )
             txt_color = (0, 0, 0)
             cv2.putText(images, text, (x0, y0 + txt_size[1]), font, 0.4, txt_color, thickness=1)
-        time.sleep(2)
+        # time.sleep(2)
+        # print(images.shape)
+        # print("%"*20)
         cv2.imwrite(imgname, images)

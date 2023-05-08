@@ -155,8 +155,7 @@ class Trainer:
         logger.info("init prefetcher, this might take one minute or less...")
         self.prefetcher = DataPrefetcher(self.train_loader)
         # max_iter means iters per epoch
-        self.max_iter = len(self.train_loader)
-
+        self.max_iter = len(self.train_loader)            
         self.lr_scheduler = self.exp.get_lr_scheduler(
             self.exp.basic_lr_per_img * self.args.batch_size, self.max_iter
         )
@@ -260,7 +259,7 @@ class Trainer:
                     loss_str,
                     self.meter["lr"].latest,
                 )
-                + (", size: {:d}, {}".format(self.input_size[0], eta_str))
+                + (", size: {:d} {:d}, {}".format(self.input_size[0], self.input_size[1], eta_str))
             )
 
             if self.rank == 0:

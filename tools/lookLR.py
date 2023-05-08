@@ -9,7 +9,7 @@ def make_parser():
     parser.add_argument(
         "-f",
         "--exp_file",
-        default='/code/YOLOX/exps/example/custom/yolox_mobilenetv2-050_033-ghostfpn-Two-C.py',
+        default='/code/YOLOX/exps/example/custom/yolox_mobilenetv2-050_033-ghostfpn-One-C.py',
         type=str,
         help="plz input your experiment description file",
     )
@@ -31,6 +31,7 @@ if __name__ == "__main__":
     no_aug_epochs = exp.no_aug_epochs
     min_lr_ratio = exp.min_lr_ratio
     max_epoch = exp.max_epoch
+    milestones = exp.milestones
 
     lr_list = list()
 
@@ -52,12 +53,13 @@ if __name__ == "__main__":
         warmup_lr_start=warmup_lr,
         no_aug_epochs=no_aug_epochs,
         min_lr_ratio=min_lr_ratio,
+        milestones=milestones,
     )
     
     for epoch in range(0, max_epoch):
         for ither in range(max_iter):
             lr = lr_scheduler.update_lr(progress_in_iter(epoch, max_iter, ither) + 1)
-            lr_list.append(lr)
-
+        lr_list.append(lr)
+    print(lr_list)
     plt.plot(lr_list)
     plt.savefig('./yoloxwarmcos.jpg')

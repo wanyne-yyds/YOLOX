@@ -16,7 +16,7 @@ class Exp(MyExp):
         self.depth = 0.33
         self.width = 0.50
         self.act = 'LeakyReLU'              #* 激活函数
-        self.num_classes = 3                #* 类别数
+        self.num_classes = 1                #* 类别数
         self.backbone_net = "MobileNetV2"   #? 网络选择(MobileNetV2, CSPDarknet)
         self.out_indices = [6, 12, 16]
         self.mobilenet_invertedt = [
@@ -35,17 +35,15 @@ class Exp(MyExp):
         self.Head_in_channels = [32, 32, 32, 32] # ghostfpn 输出: in_c * width
         self.Head_out_channels = 32
         self.reg_iou_type = 'iou'
-        self.cls_weight = [1, 0.2, 0]
-        self.ignore_label = 2.0
 
         # ---------------- dataloader config ---------------- #
         self.data_num_workers = 10          #* 工人数量
         self.input_size = (320, 576)        #* 输入尺寸(高, 宽)
         self.multiscale_range = 0           #* 0 关闭多尺度
-        self.data_dir = "/code/data/YOLOX-CocoFormat-BSD_One_Classes-New-WeightLoss-2023-04-21_15:24:16"
+        self.data_dir = "/code/data/YOLOX-Yolo2CocoFormat-BSD_One_Classes-2023-05-08_15:26"
         self.train_ann = "instances_train2017.json"
         self.val_ann = "instances_val2017.json"
-        self.output_dir = "./YOLOX_outputs/YOLOX-BSD-ghostfpn-One_classes"
+        self.output_dir = "./YOLOX_outputs/YOLOX-BSD-ghostfpn-One_classes_hyh"
 
         # --------------- transform config ----------------- #
         self.mosaic_prob = -1               #* mosaic 概率
@@ -61,13 +59,15 @@ class Exp(MyExp):
         # --------------  training config --------------------- #
         self.warmup_epochs = 5              #* 热身
         self.max_epoch = 160                #* 最大 epoch
-        self.basic_lr_per_img = 0.008 / 64.0 #* LR (SGD: 0.01; AdamW: 0.004)
+        self.basic_lr_per_img = 0.004 / 64.0 #* LR (SGD: 0.01; AdamW: 0.004)
         self.no_aug_epochs = -1             #* 多少 epoch 关闭 mosaic 増强
         self.eval_interval = 10             #* 验证 epoch
-        self.print_interval = 400
+        self.print_interval = 100           #* 打印间隔
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
         self.weight_decay = 0.05            #* SGD: 5e-4; AdamW: 0.05
         self.optim_type = "AdamW"           #* SGD, AdamW
+        self.scheduler = "multistep"        #* 默认：yoloxwarmcos
+        self.milestones = [50, 100, 160]    #* 学习率下降的 epoch
 
         # -----------------  testing config ------------------ #
         self.test_size = (320, 576)         #* 测试尺寸
@@ -79,7 +79,7 @@ class Exp(MyExp):
                     m.eps = 1e-3
                     m.momentum = 0.03
         if "model" not in self.__dict__:
-            from yolox.models import YOLOX, YOLOGhostPAN, YOLOXHeadFour
+            from yolox.models import YOLOX, YOLOGhostPAN, YOLOXHeadFour_Fast
 
             if self.backbone_net == 'CSPDarknet':
                 in_channels = [256, 512, 1024]          # C
@@ -91,8 +91,8 @@ class Exp(MyExp):
             backbone = YOLOGhostPAN(self.depth, self.width, in_features, in_channels=in_channels, act=self.act, \
                 depthwise=self.depthwise, backbone=self.backbone_net, mobilenet_invertedt=self.mobilenet_invertedt, out_indices=self.out_indices)
             
-            head = YOLOXHeadFour(self.num_classes, self.width, strides=self.strides, in_channels=self.Head_in_channels, out_c=self.Head_out_channels, \
-                                 act=self.act, depthwise=True, iou_type=self.reg_iou_type, cls_weight=self.cls_weight, conv_models_deploy=self.conv_models_deploy)
+            head = YOLOXHeadFour_Fast(self.num_classes, self.width, strides=self.strides, in_channels=self.Head_in_channels, out_c=self.Head_out_channels, \
+                                 act=self.act, depthwise=True, iou_type=self.reg_iou_type, conv_models_deploy=self.conv_models_deploy)
             self.model = YOLOX(backbone, head)
 
         self.model.apply(init_yolo)

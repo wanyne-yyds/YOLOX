@@ -33,8 +33,6 @@ class Exp(MyExp):
         self.Head_in_channels = [32, 32, 32, 32] # ghostfpn 输出: in_c * width
         self.Head_out_channels = 32
         self.reg_iou_type = 'iou'
-        self.cls_weight = [1, 0.2, 1, 0]
-        self.ignore_label = 3.0
 
         # ---------------- dataloader config ---------------- #
         self.data_num_workers = 10          #* 工人数量
@@ -58,8 +56,8 @@ class Exp(MyExp):
 
         # --------------  training config --------------------- #
         self.warmup_epochs = 5              #* 热身
-        self.max_epoch = 160                #* 最大 epoch
-        self.basic_lr_per_img = 0.008 / 64.0 #* LR (SGD: 0.01; AdamW: 0.004)
+        self.max_epoch = 50                #* 最大 epoch
+        self.basic_lr_per_img = 0.004 / 64.0 #* LR (SGD: 0.01; AdamW: 0.004)
         self.no_aug_epochs = -1             #* 多少 epoch 关闭 mosaic 増强
         self.eval_interval = 10             #* 验证 epoch
         self.print_interval = 400
@@ -90,7 +88,7 @@ class Exp(MyExp):
                 depthwise=self.depthwise, backbone=self.backbone_net, mobilenet_invertedt=self.mobilenet_invertedt, out_indices=self.out_indices)
             
             head = YOLOXHeadFour(self.num_classes, self.width, strides=self.strides, in_channels=self.Head_in_channels, out_c=self.Head_out_channels, \
-                                 act=self.act, depthwise=True, iou_type=self.reg_iou_type, cls_weight=self.cls_weight, conv_models_deploy=self.conv_models_deploy)
+                                 act=self.act, depthwise=True, iou_type=self.reg_iou_type, conv_models_deploy=self.conv_models_deploy)
             self.model = YOLOX(backbone, head)
 
         self.model.apply(init_yolo)

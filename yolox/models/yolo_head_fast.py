@@ -28,7 +28,6 @@ class YOLOXHeadFour_Fast(nn.Module):
         iou_type='iou',
         depthwise=False,
         conv_models_deploy=False,
-        cls_weight=[1, 1]
     ):
         """
         Args:
@@ -41,7 +40,6 @@ class YOLOXHeadFour_Fast(nn.Module):
         self.num_classes = num_classes
         self.decode_in_inference = True  # for deploy, set to False
         self.conv_models_deploy = conv_models_deploy
-        self.cls_weight = cls_weight
 
         self.cls_convs = nn.ModuleList()
         self.reg_convs = nn.ModuleList()
@@ -76,14 +74,14 @@ class YOLOXHeadFour_Fast(nn.Module):
             self.obj_convs.append(
                 nn.Sequential(
                     *[
-                        Conv(                            
+                        BaseConv(                            
                             in_channels=int(in_channels[i] * width),
                             out_channels=int(out_c * width),
                             ksize=3,
                             stride=1,
                             act=act,
                         ),
-                        Conv(                            
+                        BaseConv(                            
                             in_channels=int(out_c * width),
                             out_channels=int(out_c * width),
                             ksize=3,
@@ -144,7 +142,7 @@ class YOLOXHeadFour_Fast(nn.Module):
         self.use_l1 = False
         self.l1_loss = nn.L1Loss(reduction="none")
         self.bcewithlog_loss = nn.BCEWithLogitsLoss(reduction="none")
-        self.focalloss = FocalLoss(gamma=2, alpha=0.25, reduction="none", loss_weight=1)
+        # self.focalloss = FocalLoss(gamma=2, alpha=0.25, reduction="none", loss_weight=1)
         self.iou_loss = IOUloss(reduction="none", loss_type=iou_type)
         self.strides = strides
         self.grids = [torch.zeros(1)] * len(in_channels)

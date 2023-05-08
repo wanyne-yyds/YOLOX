@@ -8,6 +8,5 @@ CUDA_VISIBLE_DEVICES=2 python3 tools/demo.py \
     --device gpu \
     --conf 0.2 \
     --nms 0.45 \
-    --save_pr_content
     # --fp16 \
     # --fuse \
