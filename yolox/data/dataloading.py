@@ -87,6 +87,9 @@ class DataLoader(torchDataLoader):
 
     def close_mosaic(self):
         self.batch_sampler.mosaic = False
+    
+    def open_transform(self):
+        self.batch_sampler.open_change = True
 
 
 def list_collate(batch):

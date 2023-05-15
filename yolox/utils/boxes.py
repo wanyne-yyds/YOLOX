@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding:utf-8 -*-
 # Copyright (c) Megvii Inc. All rights reserved.
 
 import numpy as np
@@ -15,8 +16,10 @@ __all__ = [
     "adjust_box_anns",
     "xyxy2xywh",
     "xyxy2cxcywh",
+    "xyxy2cxcywh_pad",
     "bboxes_iou_batch",
     "cxcywh2xyxy",
+    "yolo2voc",
 ]
 
 
@@ -136,6 +139,17 @@ def xyxy2cxcywh(bboxes):
     bboxes[:, 1] = bboxes[:, 1] + bboxes[:, 3] * 0.5
     return bboxes
 
+def yolo2voc(bboxes, img_w, img_h):
+    bboxes[:, 0] = bboxes[:, 0] * img_w
+    bboxes[:, 1] = bboxes[:, 1] * img_h
+    bboxes[:, 2] = bboxes[:, 2] * img_w
+    bboxes[:, 3] = bboxes[:, 3] * img_h
+    bboxes[:, 0] = bboxes[:, 0] - 0.5 * bboxes[:, 2]
+    bboxes[:, 2] = bboxes[:, 0] + 0.5 * bboxes[:, 2]
+    bboxes[:, 1] = bboxes[:, 1] - 0.5 * bboxes[:, 3]
+    bboxes[:, 3] = bboxes[:, 1] + 0.5 * bboxes[:, 3]
+
+    return bboxes
 
 def bboxes_iou_batch(bboxes_a, bboxes_b, xyxy=True):
     """计算两组矩形两两之间的iou
@@ -192,4 +206,18 @@ def cxcywh2xyxy(bboxes):
     bboxes[:, 1] = bboxes[:, 1] - bboxes[:, 3] * 0.5
     bboxes[:, 2] = bboxes[:, 0] + bboxes[:, 2]
     bboxes[:, 3] = bboxes[:, 1] + bboxes[:, 3]
+    return bboxes
+
+def xyxy2cxcywh_pad(bboxes, r_w, r_h, padw, padh):
+
+    bboxes[:, 0] = r_w * bboxes[:, 0] + padw
+    bboxes[:, 1] = r_h * bboxes[:, 1] + padh
+    bboxes[:, 2] = r_w * bboxes[:, 2] + padw
+    bboxes[:, 3] = r_h * bboxes[:, 3] + padh
+
+    bboxes[:, 2] = bboxes[:, 2] - bboxes[:, 0]
+    bboxes[:, 3] = bboxes[:, 3] - bboxes[:, 1]
+    bboxes[:, 0] = bboxes[:, 0] + bboxes[:, 2] * 0.5
+    bboxes[:, 1] = bboxes[:, 1] + bboxes[:, 3] * 0.5
+
     return bboxes

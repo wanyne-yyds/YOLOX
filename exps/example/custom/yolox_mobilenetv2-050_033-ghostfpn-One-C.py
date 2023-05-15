@@ -40,10 +40,10 @@ class Exp(MyExp):
         self.data_num_workers = 10          #* 工人数量
         self.input_size = (320, 576)        #* 输入尺寸(高, 宽)
         self.multiscale_range = 0           #* 0 关闭多尺度
-        self.data_dir = "/code/data/YOLOX-Yolo2CocoFormat-BSD_One_Classes-2023-05-08_15:26"
+        self.data_dir = "/code/data/YOLOX-Yolo2CocoFormat-BSD_One_Classes-2023-05-11_16:17"
         self.train_ann = "instances_train2017.json"
         self.val_ann = "instances_val2017.json"
-        self.output_dir = "./YOLOX_outputs/YOLOX-BSD-ghostfpn-One_classes_hyh"
+        self.output_dir = "./YOLOX_outputs/YOLOX-BSD-ghostfpn-One_classes_hyh_focalloss_val"
 
         # --------------- transform config ----------------- #
         self.mosaic_prob = -1               #* mosaic 概率
@@ -57,17 +57,95 @@ class Exp(MyExp):
         self.shear = 2.0                    #* 剪切角范围
 
         # --------------  training config --------------------- #
-        self.warmup_epochs = 5              #* 热身
-        self.max_epoch = 160                #* 最大 epoch
-        self.basic_lr_per_img = 0.004 / 64.0 #* LR (SGD: 0.01; AdamW: 0.004)
+        self.warmup_epochs = 1              #* 热身
+        self.max_epoch = 20                #* 最大 epoch
+        self.basic_lr_per_img = 0.001 / 64.0 #* LR (SGD: 0.01; AdamW: 0.004)
         self.no_aug_epochs = -1             #* 多少 epoch 关闭 mosaic 増强
+        self.no_change_epochs = 90          #* 多少 epoch 更换训练数据扩展
         self.eval_interval = 10             #* 验证 epoch
-        self.print_interval = 100           #* 打印间隔
+        self.print_interval = 500           #* 打印间隔
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
-        self.weight_decay = 0.05            #* SGD: 5e-4; AdamW: 0.05
-        self.optim_type = "AdamW"           #* SGD, AdamW
-        self.scheduler = "multistep"        #* 默认：yoloxwarmcos
-        self.milestones = [50, 100, 160]    #* 学习率下降的 epoch
+        self.weight_decay = 5e-4            #* SGD: 5e-4; AdamW: 0.05
+        self.optim_type = "SGD"             #* SGD, AdamW
+        self.scheduler = "yoloxwarmcos"     #* 默认：yoloxwarmcos
+        # self.milestones = [50, 100, 160]    #* 学习率下降的 epoch
+
+        self.train_transform_0 = [
+            "PadToAspectRatio(w2h_ratio=1.8, border_mode=0)",
+            "PadIfNeeded(min_height=320, min_width=576, border_mode=0, p=1)",
+            "RandomCopyBbox(p=0.2, bbox_min_scale=0.008, scale=(0.7, 1.5))",
+            "CropAndPad(percent=(-0.1, 0.1), keep_size=True, sample_independently=True, p=0.5)",
+            "MyGridDropout(ratio_range=(0.1, 0.5), holes_number=(1, 7), random_offset=True, p=0.05)",
+            "OneOf([\
+                MyRotate(limit=40, border_mode=0, p=0.1, adjust_factor=0.35),\
+                MyRotate(limit=70, border_mode=0, p=0.1, adjust_factor=0.35),\
+                ], p=0.1)",
+            "OneOf([\
+                MyRandomSizedBBoxSafeCrop(height=320, width=576, erosion_rate=0.0, scale=(0.1, 1), ratio=(1.4, 2.2), p=0.3, alignment='random'),\
+                MyRandomSizedBBoxSafeCrop(height=320, width=576, erosion_rate=0.0, scale=(0.1, 1), ratio=(1.7, 1.9), p=0.3, alignment='random'),\
+                RandomEraseBbox(scale=(0.65, 0.8), p=0.3, p_erase_all=1),\
+                ], p=0.2)",
+            "OneOf([\
+                RandomCropIfEmpty(height=320, width=576, scale=(0.001, 1), ratio=(0.01, 100.0), p=0.2),\
+                RandomCropIfEmpty(height=320, width=576, scale=(0.25, 1), ratio=(1.0, 2.5), p=0.2),\
+                ], p=0.3)",
+            "RandomEraseBbox(scale=(0.6, 0.75), p=0.2)",
+            "OneOf([\
+                Resize(p=0.3, height=320, width=576, interpolation=cv2.INTER_NEAREST),\
+                Resize(p=0.4, height=320, width=576, interpolation=cv2.INTER_LINEAR),\
+                Resize(p=0.1, height=320, width=576, interpolation=cv2.INTER_CUBIC),\
+                Resize(p=0.05, height=320, width=576, interpolation=cv2.INTER_LANCZOS4),\
+                Resize(p=0.05, height=320, width=576, interpolation=cv2.INTER_AREA),\
+            ], p=1)",
+            "ToGray(p=0.1)",
+            "OneOf([\
+                RandomBrightnessContrast(p=0.1, brightness_limit=(-0.3, 0), contrast_limit=(-0.3, 0), brightness_by_max=False),\
+                ColorJitter(p=0.2, brightness=0.3, contrast=0.5, saturation=0, hue=0),\
+                ColorJitter(p=0.2, brightness=0.3, contrast=0.5, saturation=0.1, hue=0.1),\
+                ], p=0.4)",
+            "OneOf([\
+                Downscale(scale_min=0.8, scale_max=0.97, p=0.2),\
+                JpegCompression(quality_lower=40, quality_upper=95, p=0.8),\
+                GaussNoise(var_limit=(10.0, 50.0), p=0.2),\
+                ], p=0.02)",
+            "OneOf([\
+                MotionBlur(blur_limit=(3, 5), p=0.6),\
+                GaussianBlur(blur_limit=(3, 5), sigma_limit=3, p=0.8),\
+                MedianBlur(blur_limit=(3, 5), p=0.2),\
+                Blur(blur_limit=(3, 5), p=0.2),\
+                ], p=0.05)",
+            "HorizontalFlip(p=0.5)",
+        ]
+
+        self.train_transform_1 = [
+            "PadToAspectRatio(w2h_ratio=1.8, border_mode=0)",
+            "PadIfNeeded(min_height=320, min_width=576, border_mode=0, p=1)",
+            "CropAndPad(percent=(-0.1, 0.1), keep_size=True, sample_independently=True, p=0.3)",
+            "OneOf([\
+                MyRandomSizedBBoxSafeCrop(height=320, width=576, erosion_rate=0.0, scale=(0.1, 1), ratio=(1.4, 2.2), p=0.2, union_of_bboxes=True, alignment='random'),\
+                MyRandomSizedBBoxSafeCrop(height=320, width=576, erosion_rate=0.0, scale=(0.1, 1), ratio=(1.7, 1.9), p=0.4, union_of_bboxes=True, alignment='random'),\
+                ], p=0.1)",
+            "OneOf([\
+                Resize(p=0.2, height=320, width=576, interpolation=cv2.INTER_NEAREST),\
+                Resize(p=0.4, height=320, width=576, interpolation=cv2.INTER_LINEAR),\
+                Resize(p=0.1, height=320, width=576, interpolation=cv2.INTER_CUBIC),\
+                Resize(p=0.05, height=320, width=576, interpolation=cv2.INTER_LANCZOS4),\
+                Resize(p=0.05, height=320, width=576, interpolation=cv2.INTER_AREA),\
+            ], p=1)",
+            "OneOf([\
+                MyRotate(limit=30, border_mode=0, p=0.1, adjust_factor=0.35),\
+                ], p=0.1)",
+            "OneOf([\
+                ColorJitter(p=0.3, brightness=0.3, contrast=0.5, saturation=0, hue=0),\
+                ColorJitter(p=0.2, brightness=0.3, contrast=0.5, saturation=0.1, hue=0.1),\
+                ], p=0.4)",
+            "HorizontalFlip(p=0.5)",
+        ]
+
+        self.val_transform = [
+            "PadToAspectRatio(w2h_ratio=1.8, border_mode=0)",
+            "Resize(p=1, height=320, width=576)",
+        ]
 
         # -----------------  testing config ------------------ #
         self.test_size = (320, 576)         #* 测试尺寸

@@ -23,7 +23,7 @@ int bsd_yolox_images()
 
     #if defined(USE_MNN)
         cfg.baseCfg.forward_type = BSJ_AI::Inference::InferenceType::FORWARD_MNN; // 检测器
-        cfg.baseCfg.model_path = "/home/ckn/Code/YOLOX/demo/mnn/model/yolox.mnn";
+        cfg.baseCfg.model_path = "/home/ckn/Code/YOLOX/demo/mnn/model/yolox-2023-05-12_092911-hyhone.mnn";
         cfg.baseCfg.netHeight    = DETECTOR_INPUT_HEIGHT;
         cfg.baseCfg.netWidth     = DETECTOR_INPUT_WIDTH;
     #elif defined(USE_NCNN)
@@ -52,20 +52,17 @@ int bsd_yolox_images()
     cfg.baseCfg.srcFormat = BSJ_AI::IMAGE_FORMAT::BGR888;
 
     cfg.baseCfg.strides  = std::vector<float>{8.f, 16.f, 32.f, 64.f}; // 下采样大小
-    cfg.baseCfg.nClasses = 4;                                  // 输出类别
-    cfg.baseCfg.thresh   = 0.4;
+    cfg.baseCfg.nClasses = 1;                                  // 输出类别
+    cfg.baseCfg.thresh   = 0.3;
     cfg.baseCfg.nThread  = 1; // 多线程
     cfg.nms_thresh       = 0.45;
 
     static const char* class_names[] = {
         "person",
-        "personD",
-        "other",
-        "ignore"
     };
 
     int ret = m_hDetector->init(cfg);
-    std::string src_path = "/home/ckn/ssd/Data_trainset/s_BSD/ckn_bsd_cocoformat_1/JPEGImages/val/Yescheck";
+    std::string src_path = "/data_ssd/ckn_ssd/Data_trainset/s_BSD/BSD-Third-calibration-for-large-test-set/FishEye-type/FishEyeCameraIMG/DistortionYu_Yan_She_Xiang_Tou_0Zi_Xing_Che_0Bai_Tian_/Yu_Yan_She_Xiang_Tou_0Zi_Xing_Che_0Bai_Tian_Zong_Xiang_Qian_5M";
     std::vector<std::string> images_path;
     BSJ_AI::searchAllFiles(src_path, images_path, "jpg", true);
 
@@ -118,7 +115,6 @@ int bsd_yolox_images()
         }
 
         cv::imwrite("./image_out/" + std::to_string(i) + ".jpg", frame);
-        break;
     }
     return 0;
 }

@@ -10,14 +10,22 @@ from loguru import logger
 import cv2
 
 import torch
+# import albumentations as A
+from yolox.data.data_augment_alb import *
 
 from yolox.data.data_augment import ValTransform
 from yolox.data.datasets import COCO_CLASSES
 from yolox.exp import get_exp
 from yolox.utils import fuse_model, get_model_info, postprocess, vis
-
 IMAGE_EXT = [".jpg", ".jpeg", ".webp", ".bmp", ".png"]
 
+def get_transform(train_transform):
+    transform_list = list()
+    for i in range(len(train_transform)):
+        transform_list.append(eval(train_transform[i]))
+    bbox_params = BboxParams(format='pascal_voc', min_area=200, min_visibility=0.4, label_fields=['class_labels'])
+    transform = Compose(transforms=transform_list, bbox_params=bbox_params)
+    return transform
 
 def make_parser():
     parser = argparse.ArgumentParser("YOLOX Demo!")
@@ -117,7 +125,11 @@ class Predictor(object):
         self.test_size = exp.test_size
         self.device = device
         self.fp16 = fp16
-        self.preproc = ValTransform(legacy=legacy)
+        val_transform = exp.val_transform
+        
+        val_preproc = get_transform(val_transform)
+        self.preproc = ValTransform(val_preproc=val_preproc, legacy=legacy)
+
         if trt_file is not None:
             from torch2trt import TRTModule
 
@@ -200,9 +212,9 @@ def image_demo(predictor, vis_folder, path, current_time, save_result):
             save_file_name = os.path.join(save_folder, os.path.basename(image_name))
             logger.info("Saving detection result in {}".format(save_file_name))
             cv2.imwrite(save_file_name, result_image)
-        ch = cv2.waitKey(0)
-        if ch == 27 or ch == ord("q") or ch == ord("Q"):
-            break
+        # ch = cv2.waitKey(0)
+        # if ch == 27 or ch == ord("q") or ch == ord("Q"):
+        #     break
 
 
 def imageflow_demo(predictor, vis_folder, current_time, args):
@@ -233,9 +245,9 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             else:
                 cv2.namedWindow("yolox", cv2.WINDOW_NORMAL)
                 cv2.imshow("yolox", result_frame)
-            ch = cv2.waitKey(1)
-            if ch == 27 or ch == ord("q") or ch == ord("Q"):
-                break
+            # ch = cv2.waitKey(1)
+            # if ch == 27 or ch == ord("q") or ch == ord("Q"):
+            #     break
         else:
             break
 

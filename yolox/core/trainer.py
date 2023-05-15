@@ -146,10 +146,12 @@ class Trainer:
 
         # data related init
         self.no_aug = self.start_epoch >= self.max_epoch - self.exp.no_aug_epochs
+        self.no_change = self.start_epoch <= self.exp.no_change_epochs - 1
         self.train_loader = self.exp.get_data_loader(
             batch_size=self.args.batch_size,
             is_distributed=self.is_distributed,
             no_aug=self.no_aug,
+            no_change=self.no_change,
             cache_img=self.args.cache,
         )
         logger.info("init prefetcher, this might take one minute or less...")
@@ -202,17 +204,23 @@ class Trainer:
         logger.info("---> start train epoch{}".format(self.epoch + 1))
 
         if self.epoch + 1 == self.max_epoch - self.exp.no_aug_epochs or self.no_aug:
-            logger.info("--->No mosaic aug now!")
+            logger.info("---> No mosaic aug now!")
             self.train_loader.close_mosaic()
-            logger.info("--->Add additional L1 loss now!")
-            if self.is_distributed:
-                self.model.module.head.use_l1 = True
-            else:
-                self.model.head.use_l1 = True
+
             self.exp.eval_interval = 1
             if not self.no_aug:
                 self.save_ckpt(ckpt_name="last_mosaic_epoch")
 
+            logger.info("---> Add additional L1 loss now!")
+            if self.is_distributed:
+                self.model.module.head.use_l1 = True
+            else:
+                self.model.head.use_l1 = True
+
+        if self.epoch + 1 == self.exp.no_change_epochs:
+            logger.info("---> Change transforms!")
+            self.train_loader.open_transform()
+            
     def after_epoch(self):
         self.save_ckpt(ckpt_name="latest")
 

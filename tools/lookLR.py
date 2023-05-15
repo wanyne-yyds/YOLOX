@@ -9,7 +9,7 @@ def make_parser():
     parser.add_argument(
         "-f",
         "--exp_file",
-        default='/code/YOLOX/exps/example/custom/yolox_mobilenetv2-050_033-ghostfpn-One-C.py',
+        default='/code/YOLOX/exps/example/custom/yolox_mobilenetv2-050_033-ghostfpn-Two-C.py',
         type=str,
         help="plz input your experiment description file",
     )
@@ -60,6 +60,8 @@ if __name__ == "__main__":
         for ither in range(max_iter):
             lr = lr_scheduler.update_lr(progress_in_iter(epoch, max_iter, ither) + 1)
         lr_list.append(lr)
+
+    plt.grid()
     print(lr_list)
     plt.plot(lr_list)
     plt.savefig('./yoloxwarmcos.jpg')

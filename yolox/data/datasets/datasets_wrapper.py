@@ -77,10 +77,11 @@ class Dataset(torchDataset):
         input_dimension (tuple): (width,height) tuple with default dimensions of the network
     """
 
-    def __init__(self, input_dimension, mosaic=True):
+    def __init__(self, input_dimension, mosaic=True, open_change=False):
         super().__init__()
         self.__input_dim = input_dimension[:2]
         self.enable_mosaic = mosaic
+        self.enable_change = open_change
 
     @property
     def input_dim(self):
@@ -115,7 +116,8 @@ class Dataset(torchDataset):
         def wrapper(self, index):
             if not isinstance(index, int):
                 self.enable_mosaic = index[0]
-                index = index[1]
+                self.enable_change = index[1]
+                index = index[2]
 
             ret_val = getitem_fn(self, index)
 

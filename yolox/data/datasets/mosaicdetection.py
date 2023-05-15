@@ -38,8 +38,8 @@ class MosaicDetection(Dataset):
     """Detection dataset wrapper that performs mixup for normal dataset."""
 
     def __init__(
-        self, dataset, img_size, mosaic=True, preproc=None,
-        degrees=10.0, translate=0.1, mosaic_scale=(0.5, 1.5),
+        self, dataset, img_size, mosaic=True, open_change=False, preproc=None,
+        train_preproc_0=None, train_preproc_1=None, degrees=10.0, translate=0.1, mosaic_scale=(0.5, 1.5),
         mixup_scale=(0.5, 1.5), shear=2.0, enable_mixup=True,
         mosaic_prob=1.0, mixup_prob=1.0, *args
     ):
@@ -50,6 +50,7 @@ class MosaicDetection(Dataset):
             img_size (tuple):
             mosaic (bool): enable mosaic augmentation or not.
             preproc (func):
+            train_preproc (func)
             degrees (float):
             translate (float):
             mosaic_scale (tuple):
@@ -58,15 +59,18 @@ class MosaicDetection(Dataset):
             enable_mixup (bool):
             *args(tuple) : Additional arguments for mixup random sampler.
         """
-        super().__init__(img_size, mosaic=mosaic)
+        super().__init__(img_size, mosaic=mosaic, open_change=open_change)
         self._dataset = dataset
         self.preproc = preproc
+        self.train_preproc_0 = train_preproc_0
+        self.train_preproc_1 = train_preproc_1
         self.degrees = degrees
         self.translate = translate
         self.scale = mosaic_scale
         self.shear = shear
         self.mixup_scale = mixup_scale
         self.enable_mosaic = mosaic
+        self.enable_change = open_change
         self.enable_mixup = enable_mixup
         self.mosaic_prob = mosaic_prob
         self.mixup_prob = mixup_prob
@@ -77,6 +81,11 @@ class MosaicDetection(Dataset):
 
     @Dataset.mosaic_getitem
     def __getitem__(self, idx):
+
+        self.train_preproc = self.train_preproc_0
+        if self.enable_change:
+            self.train_preproc = self.train_preproc_1
+
         if self.enable_mosaic and random.random() < self.mosaic_prob:
             mosaic_labels = []
             input_dim = self._dataset.input_dim
@@ -156,7 +165,10 @@ class MosaicDetection(Dataset):
         else:
             self._dataset._input_dim = self.input_dim
             img, label, img_info, img_id = self._dataset.pull_item(idx)
-            img, label = self.preproc(img, label, self.input_dim)
+            bboxes = label[:, :4].tolist()
+            class_labels = label[:, 4].tolist()
+            transformed = self.train_preproc(image=img, bboxes=bboxes, class_labels=class_labels) 
+            img, label = self.preproc(transformed, self.input_dim)
             return img, label, img_info, img_id
 
     def mixup(self, origin_img, origin_labels, input_dim):

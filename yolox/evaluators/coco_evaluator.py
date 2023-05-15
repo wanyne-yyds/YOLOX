@@ -233,8 +233,6 @@ class COCOEvaluator:
             bboxes /= scale
 
             cls = output[:, 6]
-            if len(self.dataloader.dataset.class_ids) == 4:
-                cls[cls==1] = 0
                 
             scores = output[:, 4] * output[:, 5]
 

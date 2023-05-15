@@ -71,14 +71,14 @@ class YOLOXHeadFour(nn.Module):
             self.obj_convs.append(
                 nn.Sequential(
                     *[
-                        BaseConv(                            
+                        Conv(                            
                             in_channels=int(in_channels[i] * width),
                             out_channels=int(out_c * width),
                             ksize=3,
                             stride=1,
                             act=act,
                         ),
-                        BaseConv(                            
+                        Conv(                            
                             in_channels=int(out_c * width),
                             out_channels=int(out_c * width),
                             ksize=3,

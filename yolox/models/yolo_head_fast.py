@@ -141,8 +141,8 @@ class YOLOXHeadFour_Fast(nn.Module):
 
         self.use_l1 = False
         self.l1_loss = nn.L1Loss(reduction="none")
-        self.bcewithlog_loss = nn.BCEWithLogitsLoss(reduction="none")
-        # self.focalloss = FocalLoss(gamma=2, alpha=0.25, reduction="none", loss_weight=1)
+        self.bcewithlog_loss = nn.BCEWithLogitsLoss(reduction="none", weight=torch.tensor([0.5, 1, 0.7]))
+        self.focalloss = FocalLoss(gamma=1.7, alpha=0.8, reduction="none", loss_weight=2)
         self.iou_loss = IOUloss(reduction="none", loss_type=iou_type)
         self.strides = strides
         self.grids = [torch.zeros(1)] * len(in_channels)
@@ -342,7 +342,7 @@ class YOLOXHeadFour_Fast(nn.Module):
         if G == 0:  # 所有图片都没有gt时
             obj_targets = torch.zeros((N, A, 1), dtype=torch.float32, device=obj_preds.device)
             num_fg = 1  # 所有图片都没有gt时，设为1
-            loss_obj = self.bcewithlog_loss(obj_preds, obj_targets)
+            loss_obj = self.focalloss(obj_preds, obj_targets)
             loss_obj = loss_obj.sum() / num_fg
             losses = {
                 "loss_obj": loss_obj,
@@ -438,7 +438,7 @@ class YOLOXHeadFour_Fast(nn.Module):
             self.iou_loss(pos_bbox_preds, reg_targets)
         ).sum() / num_fg
         loss_obj = (
-            self.bcewithlog_loss(torch.reshape(obj_preds, [-1, 1]), obj_targets)
+            self.focalloss(torch.reshape(obj_preds, [-1, 1]), obj_targets)
         ).sum() / num_fg
 
         cls_preds = torch.reshape(cls_preds, [-1, self.num_classes])  # [N*A, 80]
@@ -454,8 +454,8 @@ class YOLOXHeadFour_Fast(nn.Module):
                 self.l1_loss(pos_origin_preds, l1_targets)
             ).sum() / num_fg
 
-        reg_weight = 5.0
-        loss = reg_weight * loss_iou + loss_obj + loss_cls + loss_l1
+        reg_weight = 3.0
+        loss = (reg_weight * loss_iou) + loss_obj + loss_cls + loss_l1
 
         return (
             loss,

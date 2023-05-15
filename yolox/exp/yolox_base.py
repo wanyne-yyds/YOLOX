@@ -8,10 +8,10 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 
+from ..data.data_augment_alb import *
 from .base_exp import BaseExp
 
 __all__ = ["Exp", "check_exp_value"]
-
 
 class Exp(BaseExp):
     def __init__(self):
@@ -65,6 +65,9 @@ class Exp(BaseExp):
         self.mixup_scale = (0.5, 1.5)
         # shear angle range, for example, if set to 2, the true range is (-2, 2)
         self.shear = 2.0
+        self.train_transform_0 = None
+        self.train_transform_1 = None
+        self.val_transform  = None
 
         # --------------  training config --------------------- #
         # epoch number used for warmup
@@ -80,6 +83,7 @@ class Exp(BaseExp):
         self.scheduler = "yoloxwarmcos"
         # last #epoch to close augmention like mosaic
         self.no_aug_epochs = 15
+        self.no_change_epochs = 90
         # apply EMA during training
         self.ema = True
         # lr milestones
@@ -146,16 +150,20 @@ class Exp(BaseExp):
             data_dir=self.data_dir,
             json_file=self.train_ann,
             img_size=self.input_size,
-            preproc=TrainTransform(
-                max_labels=50,
-                flip_prob=self.flip_prob,
-                hsv_prob=self.hsv_prob,
-            ),
+            preproc=None,
             cache=cache,
             cache_type=cache_type,
         )
 
-    def get_data_loader(self, batch_size, is_distributed, no_aug=False, cache_img: str = None):
+    def get_transform(self, train_transform):
+        transform_list = list()
+        for i in range(len(train_transform)):
+            transform_list.append(eval(train_transform[i]))
+        bbox_params = BboxParams(format='pascal_voc', min_area=200, min_visibility=0.4, label_fields=['class_labels'])
+        transform = Compose(transforms=transform_list, bbox_params=bbox_params)
+        return transform
+    
+    def get_data_loader(self, batch_size, is_distributed, no_aug=False, no_change=False, cache_img: str = None):
         """
         Get dataloader according to cache_img parameter.
         Args:
@@ -166,7 +174,7 @@ class Exp(BaseExp):
                 None: Do not use cache, in this case cache_data is also None.
         """
         from yolox.data import (
-            TrainTransform,
+            TrainTransform_alb,
             YoloBatchSampler,
             DataLoader,
             InfiniteSampler,
@@ -182,16 +190,21 @@ class Exp(BaseExp):
                 assert cache_img is None, \
                     "cache_img must be None if you didn't create self.dataset before launch"
                 self.dataset = self.get_dataset(cache=False, cache_type=cache_img)
+        
+        train_preproc_0 = self.get_transform(self.train_transform_0)
+        train_preproc_1 = self.get_transform(self.train_transform_1)
+        self.no_change = not no_change
 
         self.dataset = MosaicDetection(
             dataset=self.dataset,
             mosaic=not no_aug,
+            open_change=self.no_change,
             img_size=self.input_size,
-            preproc=TrainTransform(
+            preproc=TrainTransform_alb(
                 max_labels=120,
-                flip_prob=self.flip_prob,
-                hsv_prob=self.hsv_prob,
                 ),
+            train_preproc_0=train_preproc_0,
+            train_preproc_1=train_preproc_1,
             degrees=self.degrees,
             translate=self.translate,
             mosaic_scale=self.mosaic_scale,
@@ -212,6 +225,7 @@ class Exp(BaseExp):
             batch_size=batch_size,
             drop_last=False,
             mosaic=not no_aug,
+            open_change=self.no_change
         )
 
         dataloader_kwargs = {"num_workers": self.data_num_workers, "pin_memory": True}
@@ -309,13 +323,14 @@ class Exp(BaseExp):
         from yolox.data import COCODataset, ValTransform
         testdev = kwargs.get("testdev", False)
         legacy = kwargs.get("legacy", False)
+        val_preproc = self.get_transform(self.val_transform)
 
         return COCODataset(
             data_dir=self.data_dir,
             json_file=self.val_ann if not testdev else self.test_ann,
             name="val2017" if not testdev else "test2017",
             img_size=self.test_size,
-            preproc=ValTransform(legacy=legacy),
+            preproc=ValTransform(val_preproc, legacy=legacy),
         )
 
     def get_eval_loader(self, batch_size, is_distributed, **kwargs):

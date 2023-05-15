@@ -3,15 +3,16 @@ import os
 import cv2
 import time
 import json
+from tqdm import tqdm
 import shutil
 import numpy as np
 from pathlib import Path 
 from prettytable import PrettyTable
 
-path2 = "/code/data/YOLOX-Yolo2CocoFormat-BSD_One_Classes-%s/"%(time.strftime("%Y-%m-%d_%H:%M", time.localtime())) # 输出文件夹
-classes = ["person"]
-train_txt_dir = "/code/data/s_BSD/hyh_bsd_yoloformat/train_640_0.004_221026/" # train xml文件
-test_txt_dir = "/code/data/s_BSD/hyh_bsd_yoloformat/test_Normal_0.004/" # train xml文件
+path2 = "/code/data/YOLOX-Yolo2CocoFormat-BSD_Two_Classes-%s/"%(time.strftime("%Y-%m-%d_%H:%M", time.localtime())) # 输出文件夹
+classes = ["person", "pillar", "mirror"]
+train_txt_dir = "/code/data/s_BSD/hyh_bsd_yoloformat/train_640_0.004_221026_pillar_mirror_check_bbox/" # train xml文件
+test_txt_dir = "/code/data/s_BSD/hyh_bsd_yoloformat/test_Normal_0.004_PM_check_bbox/" # train xml文件
 
 # train_ratio = 1.0 # 训练集的比例
 
@@ -36,13 +37,15 @@ def convert(jpg_list, json_file, txt_file):
     bnd_id = START_BOUNDING_BOX_ID
     all_categories = {}
     new_categories = {v-1:k for k,v in categories.items()}
-    for index, line in enumerate(jpg_list):
+    for index, line in tqdm(enumerate(jpg_list)):
         jpg_f = line
         if txt_file == "Train":
             filename = jpg_f.replace(train_txt_dir, '')
         else:
             filename = jpg_f.replace(test_txt_dir, '')
+
         img = cv2.imread(jpg_f)
+
         height, width, _ = img.shape
         txt_f = jpg_f[:-3] + 'txt'
         image_id = 20190000001 + index
@@ -53,32 +56,41 @@ def convert(jpg_list, json_file, txt_file):
             content = f.readlines()
             for bbox in content:
                 category_num, x, y, w, h = bbox.split(' ')
-                category_num, x, y, w, h = int(category_num), float(x) * width, float(y) * height, float(w) * width, float(h) * height
+                category_num = int(category_num)
+                # if category_num >= len(classes):
+                #     continue
                 category = new_categories[category_num]    
                 if category in all_categories:
                     all_categories[category] += 1
                 else:
                     all_categories[category] = 1
                     
-                # if category not in categories:
-                #     if only_care_pre_define_categories:
-                #         continue
-                #     new_id = len(categories) + 1
-                #     print("[warning] category '{}' not in 'pre_define_categories'({}), create new id: {} automatically".format(category, pre_define_categories, new_id))
-                #     categories[category] = new_id
+                if category not in categories:
+                    if only_care_pre_define_categories:
+                        continue
+                    new_id = len(categories) + 1
+                    print("[warning] category '{}' not in 'pre_define_categories'({}), create new id: {} automatically".format(category, pre_define_categories, new_id))
+                    categories[category] = new_id
 
-                xmin = int((x - w * 0.5))
-                ymin = int((y - h * 0.5))
-                xmax = int((x + w * 0.5))
-                ymax = int((y + h * 0.5))
+                x, y, w, h = map(lambda x:float(x), [x, y, w, h])
+                center_x =  x * width
+                center_y =  y * height
+                bbox_width = w * width
+                bbox_height = h * height
+
+                xmin = int(center_x - bbox_width / 2)
+                ymin = int(center_y - bbox_height / 2)
+                xmax = int(center_x + bbox_width / 2)
+                ymax = int(center_y + bbox_height / 2)
+                category_id = categories[category]
 
                 # cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0,0,255), 1)
 
-                category_id = categories[category]
                 assert(xmax > xmin), "xmax <= xmin, {}".format(line)
                 assert(ymax > ymin), "ymax <= ymin, {}".format(line)
                 o_width = abs(xmax - xmin)
                 o_height = abs(ymax - ymin)
+                    
                 assert(o_width*o_height > 100), "width*height <= 0, {}".format(line)
                 ann = {'area': o_width*o_height, 'iscrowd': 0, 'image_id':
                         image_id, 'bbox':[xmin, ymin, o_width, o_height],
@@ -86,7 +98,14 @@ def convert(jpg_list, json_file, txt_file):
                         'segmentation': []}
                 json_dict['annotations'].append(ann)
                 bnd_id = bnd_id + 1
- 
+        else:
+            ann = {'area': 0, 'iscrowd': 0, 'image_id':
+                   image_id, 'bbox':[0, 0, 0, 0], 
+                   'category_id': 0, 'id': bnd_id,'ignore': 0,
+                   'segmentation': []}
+            json_dict['annotations'].append(ann)
+            bnd_id = bnd_id + 1
+
     for cate, cid in categories.items():
         cat = {'supercategory': 'none', 'id': cid, 'name': cate}
         json_dict['categories'].append(cat)
@@ -99,7 +118,7 @@ def convert(jpg_list, json_file, txt_file):
     print("category: id --> {}".format(categories))
     print(categories.keys())
     print(categories.values())
-    f = open('%s %sClassessQuantity.txt'%(path2, txt_file), 'w')
+    f = open('%s%sClassessQuantity.txt'%(path2, txt_file), 'w')
     table = PrettyTable([ '类别', '数量'])
     for keys, values in all_categories.items():
         table.add_row([keys, values])

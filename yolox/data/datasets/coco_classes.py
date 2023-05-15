@@ -4,4 +4,6 @@
 
 COCO_CLASSES = (
     "person",
+    "pillar",
+    "mirror",
     )

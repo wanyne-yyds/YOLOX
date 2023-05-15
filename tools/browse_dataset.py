@@ -32,16 +32,16 @@ if __name__ == "__main__":
     
     swap = (1, 2, 0)
     # classes_name = ["person", "personD", "other", "ignore"]
-    classes_name = ["person"]
+    classes_name = ["person" ,"pillar", "mirror"]
     if args.phase == 'train':
         print("train")
         loader = exp.get_data_loader(batch_size=1, is_distributed=False)
+        # loader = loader.dataset
     elif args.phase == 'val':
         print("val")
         loader = exp.get_eval_loader(batch_size=1, is_distributed=False)
 
     for img, target, img_info, img_id in loader:
-
         # if int(img_info[0].numpy()[0]) != 720:
         #     continue
         # print("img_info height: ",img_info[0].numpy()[0])
@@ -54,6 +54,8 @@ if __name__ == "__main__":
         imgname = "./readimg.jpg"
         if len(target.shape) == 1:
             target = target.numpy()[np.newaxis, :]
+
+        print("image shape: ", images.shape)
         
         for i in range(len(target)):
             if args.phase == "train":
@@ -89,7 +91,5 @@ if __name__ == "__main__":
             )
             txt_color = (0, 0, 0)
             cv2.putText(images, text, (x0, y0 + txt_size[1]), font, 0.4, txt_color, thickness=1)
-        # time.sleep(2)
-        # print(images.shape)
-        # print("%"*20)
+        time.sleep(3)
         cv2.imwrite(imgname, images)

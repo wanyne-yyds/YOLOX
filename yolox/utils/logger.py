@@ -134,7 +134,7 @@ class WandbLogger(object):
                  save_dir=None,
                  config=None,
                  val_dataset=None,
-                 num_eval_images=100,
+                 num_eval_images=10,
                  log_checkpoints=False,
                  **kwargs):
         """

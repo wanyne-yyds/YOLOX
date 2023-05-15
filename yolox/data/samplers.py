@@ -18,13 +18,14 @@ class YoloBatchSampler(torchBatchSampler):
     but it will turn on/off the mosaic aug.
     """
 
-    def __init__(self, *args, mosaic=True, **kwargs):
+    def __init__(self, *args, mosaic=True, open_change=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.mosaic = mosaic
+        self.open_change = open_change
 
     def __iter__(self):
         for batch in super().__iter__():
-            yield [(self.mosaic, idx) for idx in batch]
+            yield [(self.mosaic, self.open_change, idx) for idx in batch]
 
 
 class InfiniteSampler(Sampler):

@@ -15,7 +15,7 @@ import random
 import cv2
 import numpy as np
 import albumentations as A
-from yolox.utils import xyxy2cxcywh
+from yolox.utils import xyxy2cxcywh, yolo2voc
 
 
 def augment_hsv(img, hgain=5, sgain=30, vgain=30):
@@ -157,6 +157,11 @@ def preproc(img, input_size, swap=(2, 0, 1)):
     padded_img = np.ascontiguousarray(padded_img, dtype=np.float32)
     return padded_img, r
 
+def preproc_1(img, swap=(2, 0, 1)):
+    padded_img = img.transpose(swap)
+    padded_img = np.ascontiguousarray(padded_img, dtype=np.float32)
+    return padded_img
+
 def preproc_centered(img, input_size, swap=(2, 0, 1)):
     
     input_ratio = input_size[1] / input_size[0]
@@ -164,34 +169,35 @@ def preproc_centered(img, input_size, swap=(2, 0, 1)):
     input_ratio_list = [i / 10 for i in range(int((input_ratio-0.2)*10), int((input_ratio+0.3)*10))]
     
     shape = img.shape[:2]  # current shape [height, width]
+    padded_img = np.ones((input_size[0], input_size[1], 3), dtype=np.uint8) * 114
 
     if img_ratio not in input_ratio_list:
         r = min(input_size[0] / shape[0], input_size[1] / shape[1]) # input_size [height, width]
         # Compute padding
-        ratio = r, r  # width, height ratios
-        new_unpad = int(round(shape[0] * r)), int(round(shape[1] * r))
+        ratio = [r, r]  # width, height ratios
+        new_unpad = int(round(shape[0] * r)), int(round(shape[1] * r))       # new_unpad [height, width]
         dw, dh = input_size[1] - new_unpad[1], input_size[0] - new_unpad[0]  # wh padding
 
         dw /= 2  # divide padding into 2 sides
         dh /= 2
         top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
         left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
-        im = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))  # add border
-        im = im.transpose(swap)
-        im = np.ascontiguousarray(im, dtype=np.float32)
+        padded_img[top:top + img.shape[0], left:left + img.shape[1], :] = img
     else:
-        im = cv2.resize(
+        r = [input_size[0] / shape[0], input_size[1] / shape[1]]
+        img = cv2.resize(
             img,
-            (int(input_size[1]), int(input_size[0] )),
+            (int(shape[1] * r[1]), int(shape[0] * r[0])),
             interpolation=cv2.INTER_LINEAR,
         ).astype(np.uint8)
-        im = im.transpose(swap)
-        im = np.ascontiguousarray(im, dtype=np.float32)
-        r = [input_size[1] / shape[1], input_size[0] / shape[0]] # r [width, height]
-        ratio   = r
+        ratio   = [r[1], r[0]]  # r [width, height]
         dw, dh  = 0, 0
+        padded_img[:int(img.shape[0]), :int(img.shape[1])] = img
+        
+    padded_img = padded_img.transpose(swap)
+    padded_img = np.ascontiguousarray(padded_img, dtype=np.float32)
 
-    return im, ratio, (dw, dh)
+    return padded_img, ratio, (dw, dh)
 
 class TrainTransform:
     def __init__(self, max_labels=50, flip_prob=0.5, hsv_prob=1.0):
@@ -204,11 +210,12 @@ class TrainTransform:
         labels = targets[:, 4].copy()
         if len(boxes) == 0:
             targets = np.zeros((self.max_labels, 5), dtype=np.float32)
-            image, r_o, pad_o = preproc_centered(image, input_dim)
+            image, r_o = preproc(image, input_dim)
             return image, targets
 
         image_o = image.copy()
         targets_o = targets.copy()
+        height_o, width_o, _ = image_o.shape
         boxes_o = targets_o[:, :4]
         labels_o = targets_o[:, 4]
         # bbox_o: [xyxy] to [c_x,c_y,w,h]
@@ -217,30 +224,65 @@ class TrainTransform:
         if random.random() < self.hsv_prob:
             augment_hsv(image)
         image_t, boxes = _mirror(image, boxes, self.flip_prob)
-        image_t, r_, pad_ = preproc_centered(image_t, input_dim)
+        height, width, _ = image_t.shape
+        image_t, r_ = preproc(image_t, input_dim)
         # boxes [xyxy] 2 [cx,cy,w,h]
         boxes = xyxy2cxcywh(boxes)
-        # boxes *= r_
-        boxes[:, 0] = boxes[:, 0] * r_[0] + pad_[0]
-        boxes[:, 1] = boxes[:, 1] * r_[1] + pad_[1]
-        boxes[:, 2] = boxes[:, 2] * r_[0]
-        boxes[:, 3] = boxes[:, 3] * r_[1]
+        boxes *= r_
 
         mask_b = np.minimum(boxes[:, 2], boxes[:, 3]) > 1
-        
-        # 过滤掉面积小于千分之二的框
-        # mask_b = boxes[:, 2] * boxes[:, 3] > int((input_dim[0] * input_dim[1]) * 0.004)
-        
         boxes_t = boxes[mask_b]
         labels_t = labels[mask_b]
 
         if len(boxes_t) == 0:
-            image_t, r_o, pad_o = preproc_centered(image_o, input_dim)
-            # boxes_o *= r_o
-            boxes_o[:, 0] = boxes_o[:, 0] * r_o[0] + pad_o[0]
-            boxes_o[:, 1] = boxes_o[:, 0] * r_o[1] + pad_o[1]
-            boxes_o[:, 2] = boxes_o[:, 0] * r_o[0]
-            boxes_o[:, 3] = boxes_o[:, 0] * r_o[1]
+            image_t, r_o = preproc(image_o, input_dim)
+            boxes_o *= r_o
+            boxes_t = boxes_o
+            labels_t = labels_o
+
+        labels_t = np.expand_dims(labels_t, 1)
+
+        targets_t = np.hstack((labels_t, boxes_t))
+        padded_labels = np.zeros((self.max_labels, 5))
+        padded_labels[range(len(targets_t))[: self.max_labels]] = targets_t[
+            : self.max_labels
+        ]
+        padded_labels = np.ascontiguousarray(padded_labels, dtype=np.float32)
+        return image_t, padded_labels
+
+class TrainTransform_alb:
+    def __init__(self, max_labels=50,):
+        self.max_labels = max_labels
+
+    def __call__(self, transformed, input_dim):
+
+        image = transformed["image"]
+        boxes = transformed['bboxes']
+        labels = transformed['class_labels']
+        boxes = np.array(boxes)
+        labels = np.array(labels)
+
+        if len(boxes) == 0:
+            targets = np.zeros((self.max_labels, 5), dtype=np.float32)
+            image = preproc_1(image)
+            return image, targets
+
+        image_o = image.copy()
+        boxes_o = boxes.copy()
+        labels_o = labels.copy()
+        # bbox_o: [xyxy] to [c_x,c_y,w,h]
+        boxes_o = xyxy2cxcywh(boxes_o)
+
+        image_t = preproc_1(image)
+        # boxes [xyxy] 2 [cx,cy,w,h]
+        boxes = xyxy2cxcywh(boxes)
+
+        mask_b = np.minimum(boxes[:, 2], boxes[:, 3]) > 1
+        boxes_t = boxes[mask_b]
+        labels_t = labels[mask_b]
+
+        if len(boxes_t) == 0:
+            image_t = preproc_1(image_o)
             boxes_t = boxes_o
             labels_t = labels_o
 
@@ -272,29 +314,42 @@ class ValTransform:
         data
     """
 
-    def __init__(self, swap=(2, 0, 1), max_labels=50, legacy=False,):
+    def __init__(self, val_preproc, swap=(2, 0, 1), max_labels=50, legacy=False,):
         self.max_labels = max_labels
         self.swap = swap
         self.legacy = legacy
+        self.val_preproc = val_preproc
 
     # assume input is cv2 img for now
     def __call__(self, img, res, input_size):
-        img, r, pad = preproc_centered(img, input_size, self.swap)
+        if res is not None:
+            bboxes = res[:, :4].tolist()
+            class_labels = res[:, 4].tolist()
+        else:
+            bboxes = []
+            class_labels = []
+            
+        val_transformed = self.val_preproc(image=img, bboxes=bboxes, class_labels=class_labels)
+        img = val_transformed["image"]
+        boxes = val_transformed['bboxes']
+        labels = val_transformed['class_labels']
+
+        if len(boxes) != 0:
+            boxes = np.array(boxes)
+            labels = np.array(labels)
+            labels = np.expand_dims(labels, 1)
+            targets = np.hstack((boxes, labels))
+            targets = np.ascontiguousarray(targets, dtype=np.float32)
+
+        img = preproc_1(img)
         if self.legacy:
             img = img[::-1, :, :].copy()
             img /= 255.0
             img -= np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
             img /= np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
-
-        if res is None:
-            return img, np.zeros((1, 5))
-        
-        res[:, 0] = res[:, 0] * r[0] + pad[0]
-        res[:, 1] = res[:, 1] * r[1] + pad[1]
-        res[:, 2] = res[:, 2] * r[0]
-        res[:, 3] = res[:, 3] * r[1]
         
         padded_labels = np.zeros((self.max_labels, 5))
-        padded_labels[range(len(res))[: self.max_labels]] = res[: self.max_labels]
-        padded_labels = np.ascontiguousarray(padded_labels, dtype=np.float32)
+        if len(boxes) != 0:
+            padded_labels[range(len(targets))[: self.max_labels]] = targets[: self.max_labels]
+            padded_labels = np.ascontiguousarray(padded_labels, dtype=np.float32)
         return img, padded_labels

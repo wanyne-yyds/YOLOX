@@ -15,7 +15,7 @@ path2 = "/code/data/YOLOX-CocoFormat-BSD_Two_Classes-New-WeightLoss-%s/"%(time.s
 classes = [ "person", "personD", "other", "ignore"]
 # train_xml_dir = "/Annotations/train/"         # xml文件
 # val_xml_dir   = "/Annotations/val/"           # xml文件
-train_img_dir = "/code/data/s_BSD/ckn_bsd_cocoformat_1/JPEGImages/train"           # 图片
+train_img_dir = "/code/data/s_BSD/ckn_bsd_cocoformat_1/JPEGImages/train/pos/Ordinary_camera/front_blind/2/"           # 图片
 val_img_dir   = "/code/data/s_BSD/ckn_bsd_cocoformat_1/JPEGImages/val"             # 图片
 
 # train_ratio = 1.0 # 训练集的比例
