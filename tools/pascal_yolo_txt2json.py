@@ -9,8 +9,8 @@ import numpy as np
 from pathlib import Path 
 from prettytable import PrettyTable
 
-path2 = "/code/data/YOLOX-Yolo2CocoFormat-BSD_Two_Classes-%s/"%(time.strftime("%Y-%m-%d_%H:%M", time.localtime())) # 输出文件夹
-classes = ["person", "pillar", "mirror"]
+path2 = "/code/data/YOLOX-Yolo2CocoFormat-BSD_One_Classes-%s/"%(time.strftime("%Y-%m-%d_%H:%M", time.localtime())) # 输出文件夹
+classes = ["person"] # , "pillar", "mirror"
 train_txt_dir = "/code/data/s_BSD/hyh_bsd_yoloformat/train_640_0.004_221026_pillar_mirror_check_bbox/" # train xml文件
 test_txt_dir = "/code/data/s_BSD/hyh_bsd_yoloformat/test_Normal_0.004_PM_check_bbox/" # train xml文件
 
@@ -57,8 +57,10 @@ def convert(jpg_list, json_file, txt_file):
             for bbox in content:
                 category_num, x, y, w, h = bbox.split(' ')
                 category_num = int(category_num)
-                # if category_num >= len(classes):
-                #     continue
+
+                if category_num not in new_categories.keys():
+                    continue
+
                 category = new_categories[category_num]    
                 if category in all_categories:
                     all_categories[category] += 1

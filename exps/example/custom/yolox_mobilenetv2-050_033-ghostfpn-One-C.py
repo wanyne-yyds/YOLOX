@@ -40,10 +40,10 @@ class Exp(MyExp):
         self.data_num_workers = 10          #* 工人数量
         self.input_size = (320, 576)        #* 输入尺寸(高, 宽)
         self.multiscale_range = 0           #* 0 关闭多尺度
-        self.data_dir = "/code/data/YOLOX-Yolo2CocoFormat-BSD_One_Classes-2023-05-11_16:17"
+        self.data_dir = "/code/data/YOLOX-Yolo2CocoFormat-BSD_One_Classes-2023-05-18_17:06"
         self.train_ann = "instances_train2017.json"
         self.val_ann = "instances_val2017.json"
-        self.output_dir = "./YOLOX_outputs/YOLOX-BSD-ghostfpn-One_classes_hyh_focalloss_val"
+        self.output_dir = "./YOLOX_outputs/YOLOX-BSD-ghostfpn-One_classes_hyh"
 
         # --------------- transform config ----------------- #
         self.mosaic_prob = -1               #* mosaic 概率
@@ -58,8 +58,8 @@ class Exp(MyExp):
 
         # --------------  training config --------------------- #
         self.warmup_epochs = 1              #* 热身
-        self.max_epoch = 20                #* 最大 epoch
-        self.basic_lr_per_img = 0.001 / 64.0 #* LR (SGD: 0.01; AdamW: 0.004)
+        self.max_epoch = 160                #* 最大 epoch
+        self.basic_lr_per_img = 0.01 / 64.0 #* LR (SGD: 0.01; AdamW: 0.004)
         self.no_aug_epochs = -1             #* 多少 epoch 关闭 mosaic 増强
         self.no_change_epochs = 90          #* 多少 epoch 更换训练数据扩展
         self.eval_interval = 10             #* 验证 epoch

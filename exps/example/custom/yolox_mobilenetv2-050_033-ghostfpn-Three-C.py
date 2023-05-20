@@ -58,12 +58,12 @@ class Exp(MyExp):
 
         # --------------  training config --------------------- #
         self.warmup_epochs = 1              #* 热身
-        self.max_epoch = 80                #* 最大 epoch
-        self.basic_lr_per_img = 0.0001 / 64.0 #* LR (SGD: 0.01; AdamW: 0.004)
+        self.max_epoch = 160                #* 最大 epoch
+        self.basic_lr_per_img = 0.001 / 64.0 #* LR (SGD: 0.01; AdamW: 0.004)
         self.no_aug_epochs = -1             #* 多少 epoch 关闭 mosaic 増强
-        self.no_change_epochs = 60          #* 多少 epoch 更换训练数据扩展
+        self.no_change_epochs = 90          #* 多少 epoch 更换训练数据扩展
         self.eval_interval = 10             #* 验证 epoch
-        self.print_interval = 500           #* 打印间隔
+        self.print_interval = 600           #* 打印间隔
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
         self.weight_decay = 5e-4            #* SGD: 5e-4; AdamW: 0.05
         self.optim_type = "SGD"             #* SGD, AdamW

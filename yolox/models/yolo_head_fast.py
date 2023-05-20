@@ -141,8 +141,8 @@ class YOLOXHeadFour_Fast(nn.Module):
 
         self.use_l1 = False
         self.l1_loss = nn.L1Loss(reduction="none")
-        self.bcewithlog_loss = nn.BCEWithLogitsLoss(reduction="none", weight=torch.tensor([0.5, 1, 0.7]))
-        self.focalloss = FocalLoss(gamma=1.7, alpha=0.8, reduction="none", loss_weight=2)
+        self.bcewithlog_loss = nn.BCEWithLogitsLoss(reduction="none")
+        self.focalloss = FocalLoss(gamma=1.7, alpha=0.8, reduction="none", loss_weight=1)
         self.iou_loss = IOUloss(reduction="none", loss_type=iou_type)
         self.strides = strides
         self.grids = [torch.zeros(1)] * len(in_channels)
@@ -454,7 +454,7 @@ class YOLOXHeadFour_Fast(nn.Module):
                 self.l1_loss(pos_origin_preds, l1_targets)
             ).sum() / num_fg
 
-        reg_weight = 3.0
+        reg_weight = 5.0
         loss = (reg_weight * loss_iou) + loss_obj + loss_cls + loss_l1
 
         return (

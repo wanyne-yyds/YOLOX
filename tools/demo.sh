@@ -1,9 +1,9 @@
 CUDA_VISIBLE_DEVICES=0 python3 tools/demo.py \
-    video \
+    image \
     -expn YOLOX-BSD-Pre \
-    --path /code/YOLOX/pillar.mp4 \
-    --exp_file /code/YOLOX/exps/example/custom/yolox_mobilenetv2-050_033-ghostfpn-One-C.py \
-    --ckpt /code/YOLOX/YOLOX_outputs/YOLOX-BSD-ghostfpn-One_classes_hyh/yolox-mobilenetv2-050_033_2023-05-12_092911/best_ckpt.pth \
+    --path /code/data/s_BSD/BSD-Third-calibration-for-large-test-set/Universal-type/Front20220509/20220509Front \
+    --exp_file /code/YOLOX/exps/example/custom/yolox_mobilenetv2-050_033-ghostfpn-Three-C.py \
+    --ckpt /code/YOLOX/YOLOX_outputs/YOLOX-BSD-ghostfpn-Three_classes_hyh/yolox-mobilenetv2-050_033_2023-05-17_195843/best_ckpt.pth \
     --save_result \
     --device gpu \
     --conf 0.3 \

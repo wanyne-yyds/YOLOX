@@ -18,10 +18,12 @@ CUDA_VISIBLE_DEVICES=1,2,3 python3 tools/train.py \
     -expn yolox-mobilenetv2-050_033 \
     -d 3 \
     -b 64 \
-    -f /code/YOLOX/exps/example/custom/yolox_mobilenetv2-050_033-ghostfpn-Three-C.py \
-    -c /code/YOLOX/YOLOX_outputs/YOLOX-BSD-ghostfpn-Three_classes_hyh/yolox-mobilenetv2-050_033_2023-05-14_223317/best_ckpt.pth \
+    -f /code/YOLOX/exps/example/custom/yolox_mobilenetv2-050_033-ghostfpn-One-C.py \
+    -c /code/YOLOX/YOLOX_outputs/YOLOX-BSD-ghostfpn-One_classes_hyh/yolox-mobilenetv2-050_033_2023-05-18_172125/best_ckpt.pth \
     -o \
     --logger wandb \
         wandb-project YOLOX-BSD-Hyh \
-        wandb-name YOLOX-MobilenetV2-050_033-hyhdatset-multistep-SGD-Three-320x576-$current_time \
-        wandb-save_dir YOLOX_outputs/YOLOX-BSD-ghostfpn-Three_classes_hyh \
+        wandb-name YOLOX-MobilenetV2-050_033-hyhdatset-multistep-SGD-One-320x576-$current_time \
+        wandb-save_dir YOLOX_outputs/YOLOX-BSD-ghostfpn-One_classes_hyh \
+
+    # --resume \

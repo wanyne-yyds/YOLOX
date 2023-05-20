@@ -153,7 +153,7 @@ class Predictor(object):
         img_info["width"] = width
         img_info["raw_img"] = img
 
-        ratio = min(self.test_size[0] / img.shape[0], self.test_size[1] / img.shape[1])
+        ratio = [self.test_size[0] / img.shape[0], self.test_size[1] / img.shape[1]]
         img_info["ratio"] = ratio
 
         img, _ = self.preproc(img, None, self.test_size)
@@ -180,13 +180,16 @@ class Predictor(object):
         ratio = img_info["ratio"]
         img = img_info["raw_img"]
         if output is None:
-            return img, []
+            return img
         output = output.cpu()
 
         bboxes = output[:, 0:4]
 
         # preprocessing: resize
-        bboxes /= ratio
+        bboxes[:, 0] /= ratio[1]
+        bboxes[:, 1] /= ratio[0]
+        bboxes[:, 2] /= ratio[1]
+        bboxes[:, 3] /= ratio[0]
 
         cls = output[:, 6]
         scores = output[:, 4] * output[:, 5]
